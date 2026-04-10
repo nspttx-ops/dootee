@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dootee — ดูอะไร ดูที่ไหน dootee นี่</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060b13;        
+    --surface: #0b121e;   
+    --card: #111a2a;      
+    --border: #1e293b;    
+    --text: #f8fafc;      
+    --muted: #94a3b8;     
+    --accent: #3b82f6;    
+    --accent-hover: #60a5fa;
+
+    --netflix: #e50914;
+    --disney: #1a78c2;
+    --hbo: #6b2fa0;
+    --prime: #00a8e1;
+    --apple: #cbd5e1;
+    --hulu: #1ce783;
+    --other: #ff6b35;
+    --youtube: #ff0000;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Prompt', sans-serif; 
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* NAVBAR */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 16px 24px;
+  }
+  .header-container {
+    max-width: 1600px; 
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  
+  .brand-group { display: flex; flex-direction: column; }
+  .logo { font-size: 2rem; font-weight: 700; color: var(--text); letter-spacing: 0.5px; text-decoration: none; line-height: 1.1; }
+  .logo span { color: var(--accent); }
+  .tagline { font-size: 0.85rem; color: var(--muted); font-weight: 300; margin-top: 2px; letter-spacing: 0.5px; }
+
+  .search-wrap { flex: 1; max-width: 500px; position: relative; }
+  .search-wrap svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+  #searchInput { width: 100%; padding: 12px 16px 12px 48px; background: rgba(30, 41, 59, 0.5); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Prompt', sans-serif; font-size: 1rem; outline: none; transition: all .2s ease; }
+  #searchInput:focus { background: var(--card); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+  #searchInput::placeholder { color: var(--muted); font-weight: 300; }
+
+  .auth-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 8px 16px; border-radius: 8px; font-family: 'Prompt', sans-serif; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .auth-btn:hover { border-color: var(--text); color: var(--text); }
+  .auth-btn.logged-in { background: rgba(239, 68, 68, 0.1); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+
+  /* MAIN LAYOUT */
+  .layout-wrapper {
+    display: flex;
+    max-width: 1600px;
+    margin: 32px auto 60px;
+    padding: 0 24px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+  .main-content { flex-grow: 1; min-width: 0; }
+
+  /* SIDEBARS (Ads) */
+  .sidebar {
+    width: 220px; /* ลดความกว้าง sidebar ลงเล็กน้อยเพื่อเพิ่มพื้นที่ตรงกลาง */
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 100px; 
+  }
+  .ad-item {
+    width: 100%;
+    min-height: 250px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .ad-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 12px;
+  }
+  .del-ad-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-family: 'Prompt', sans-serif;
+    font-size: 0.75rem;
+    cursor: pointer;
+    z-index: 10;
+  }
+  .del-ad-btn:hover { background: #dc2626; }
+
+  @media(max-width: 1100px) { .sidebar { display: none; } }
+
+  /* FILTER SECTION */
+  .controls-bar { margin-bottom: 24px; }
+  .filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .filter-label { color: var(--muted); font-size: 0.95rem; margin-right: 8px; font-weight: 500; }
+  .pill { padding: 8px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--muted); font-family: 'Prompt', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all .2s; white-space: nowrap; }
+  .pill:hover { border-color: var(--muted); color: var(--text); transform: translateY(-2px); }
+  .pill.active { background: rgba(59, 130, 246, 0.1); border-color: var(--accent); color: var(--accent); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15); }
+
+  .stats-row { font-size: 0.9rem; color: var(--muted); margin-bottom: 24px; }
+  .stats-row span { color: var(--text); font-weight: 600; }
+
+  /* MOVIE GRID */
+  /* ปรับ minmax ให้เล็กลง (180px) เพื่อให้แสดง 4 คอลัมน์ได้ง่ายขึ้น */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+  
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; transition: transform .3s, border-color .3s, box-shadow .3s; animation: fadeUp .4s ease both; }
+  .card:hover { transform: translateY(-6px); border-color: var(--accent); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+  .card-poster { width: 100%; aspect-ratio: 2 / 3; background: #0b121e; border-radius: 8px; margin-bottom: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.05); }
+  .card-poster img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
+  .card:hover .card-poster img { transform: scale(1.08); }
+  .no-poster { color: var(--muted); font-size: 0.8rem; text-align: center; }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+  .card-top { flex-grow: 1; margin-bottom: 10px; }
+  .movie-title { font-size: 1rem; font-weight: 600; line-height: 1.3; color: var(--text); margin-bottom: 4px; }
+  .movie-th { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+  .movie-year { display: inline-block; font-size: 0.7rem; font-weight: 500; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; margin-top: 4px; }
+  .movie-meta { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .badge { font-size: 0.65rem; padding: 3px 6px; border-radius: 6px; background: rgba(148, 163, 184, 0.1); color: var(--muted); border: 1px solid rgba(148, 163, 184, 0.2); }
+
+  .platforms { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .platform-tag { font-size: 0.6rem; font-weight: 600; padding: 3px 6px; border-radius: 4px; letter-spacing: 0.5px; }
+  .platform-tag.netflix   { background: rgba(229,9,20,.15);   color: #ff6b75; border: 1px solid rgba(229,9,20,.3); }
+  .platform-tag.disney    { background: rgba(26,120,194,.15);  color: #60a5fa; border: 1px solid rgba(26,120,194,.3); }
+  .platform-tag.hbo       { background: rgba(107,47,160,.15); color: #c084fc; border: 1px solid rgba(107,47,160,.3); }
+  .platform-tag.prime     { background: rgba(0,168,225,.15);  color: #38bdf8; border: 1px solid rgba(0,168,225,.3); }
+  .platform-tag.apple     { background: rgba(203,213,225,.1); color: #cbd5e1; border: 1px solid rgba(203,213,225,.2); }
+  .platform-tag.hulu      { background: rgba(28,231,131,.1);  color: #4ade80; border: 1px solid rgba(28,231,131,.25); }
+  .platform-tag.youtube   { background: rgba(255,0,0,.15);    color: #f87171; border: 1px solid rgba(255,0,0,.3); }
+  .platform-tag.other     { background: rgba(255,107,53,.15); color: #fb923c; border: 1px solid rgba(255,107,53,.3); }
+
+  .audio-meta { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+  .audio-label { font-size: 0.65rem; color: var(--muted); }
+  .audio-tag { font-size: 0.6rem; font-weight: 500; padding: 2px 4px; border-radius: 4px; background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1); }
+
+  /* ADMIN PANEL */
+  .admin-panel { display: none; margin-bottom: 30px; gap: 16px; flex-direction: column; }
+  .card-actions { display: flex; gap: 4px; margin-top: auto; border-top: 1px solid var(--border); padding-top: 10px; }
+  .btn-edit, .btn-del { flex: 1; padding: 4px 0; border-radius: 4px; font-family: 'Prompt', sans-serif; font-size: 0.7rem; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; transition: all .2s; text-align: center; }
+  .btn-edit { color: var(--muted); }
+  .btn-edit:hover { border-color: var(--accent); color: var(--accent); background: rgba(59, 130, 246, 0.05); }
+  .btn-del  { color: var(--muted); }
+  .btn-del:hover  { border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.05); }
+
+  /* FORMS & MODALS */
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  summary { padding: 16px 20px; cursor: pointer; font-weight: 600; font-size: 1rem; user-select: none; display: flex; align-items: center; gap: 12px; color: var(--text); }
+  summary::marker { display: none; content: ''; }
+  summary svg { color: var(--accent); flex-shrink: 0; }
+  .form-body { padding: 0 20px 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  @media(max-width:600px){ .form-grid { grid-template-columns: 1fr; } }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; font-weight: 500; }
+  .field input[type="text"], .field input[type="number"], .field input[type="url"], .field input[type="password"], .field select { width: 100%; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Prompt', sans-serif; font-size: 0.9rem; outline: none; transition: border-color .2s; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+
+  .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .plat-cb { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 0.85rem; transition: all .2s; user-select: none; }
+  .plat-cb input { display: none; }
+  .plat-cb.checked { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); color: var(--accent); }
+
+  .btn-add { margin-top: 16px; width: 100%; padding: 12px; background: var(--accent); color: #fff; font-family: 'Prompt', sans-serif; font-size: 1rem; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: background .2s; }
+  .btn-add:hover { background: var(--accent-hover); }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; padding: 24px; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+  .modal h3 { font-size: 1.2rem; margin-bottom: 20px; color: var(--text); }
+  .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+  .btn-cancel, .btn-save { padding: 10px; font-family: 'Prompt', sans-serif; border-radius: 8px; cursor: pointer; }
+  .btn-cancel { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--text); font-weight: 500; }
+  .btn-cancel:hover { background: rgba(255,255,255,0.05); }
+  .btn-save { flex: 2; background: var(--accent); color: #fff; font-weight: 600; border: none; }
+  .btn-save:hover { background: var(--accent-hover); }
+
+  footer { text-align: center; padding: 32px 24px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); background: var(--surface); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-container">
+    <div class="brand-group">
+      <a href="#" class="logo">doo<span>tee</span></a>
+      <div class="tagline">ดูอะไร ดูที่ไหน dootee นี่</div>
+    </div>
+    <div class="search-wrap">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="searchInput" placeholder="ค้นหาชื่อหนัง, ซีรีส์ หรือปีที่ฉาย...">
+    </div>
+    <button id="authBtn" class="auth-btn" onclick="openLoginModal()">Admin Login</button>
+  </div>
+</header>
+
+<div class="layout-wrapper">
+  
+  <aside class="sidebar" id="sidebarLeft">
+    </aside>
+
+  <main class="main-content">
+    
+    <div class="admin-panel" id="adminPanel">
+      
+      <details id="addDetails">
+        <summary><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> เพิ่มหนัง / ซีรีส์</summary>
+        <div class="form-body">
+          <div class="form-grid">
+            <div class="field" style="grid-column:1/-1">
+              <label>ชื่อเรื่อง (ภาษาอังกฤษหรือภาษาหลัก) *</label>
+              <input type="text" id="f_title" placeholder="เช่น Oppenheimer">
+            </div>
+            <div class="field" style="grid-column:1/-1">
+              <label>ลิงก์รูปหน้าปก (URL)</label>
+              <input type="url" id="f_poster" placeholder="เช่น https://example.com/poster.jpg">
+            </div>
+            <div class="field">
+              <label>ชื่อภาษาไทย</label>
+              <input type="text" id="f_title_th">
+            </div>
+            <div class="field">
+              <label>ปีที่ออกฉาย</label>
+              <input type="number" id="f_year">
+            </div>
+            <div class="field">
+              <label>หมวดหมู่ (Genre)</label>
+              <select id="f_genre">
+                <option value="">-- เลือก --</option>
+                <option>Action</option><option>Comedy</option><option>Drama</option>
+                <option>Horror</option><option>Romance</option><option>Sci-Fi</option>
+                <option>Thriller</option><option>Animation</option><option>Documentary</option>
+                <option>Fantasy</option><option>Crime</option><option>Series</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>ประเทศ</label>
+              <input type="text" id="f_country">
+            </div>
+          </div>
+          
+          <div class="field">
+            <label>เสียงพากย์ที่มี (Audio)</label>
+            <div class="checkbox-group" id="dubCBs">
+              <label class="plat-cb"><input type="checkbox" value="TH">ไทย (TH)</label>
+              <label class="plat-cb"><input type="checkbox" value="EN">อังกฤษ (EN)</label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>แพลตฟอร์มที่ดูได้ *</label>
+            <div class="checkbox-group" id="platCBs">
+              <label class="plat-cb"><input type="checkbox" value="netflix">Netflix</label>
+              <label class="plat-cb"><input type="checkbox" value="disney">Disney+</label>
+              <label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label>
+              <label class="plat-cb"><input type="checkbox" value="prime">Prime</label>
+              <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
+              <label class="plat-cb"><input type="checkbox" value="hulu">Hulu</label>
+              <label class="plat-cb"><input type="checkbox" value="youtube">YouTube</label>
+              <label class="plat-cb"><input type="checkbox" value="other">อื่นๆ</label>
+            </div>
+          </div>
+          <button class="btn-add" onclick="addMovie()">บันทึกข้อมูลหนัง</button>
+        </div>
+      </details>
+
+      <details id="addAdDetails">
+        <summary><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg> จัดการป้ายโฆษณา (Sidebar Ads)</summary>
+        <div class="form-body">
+          <div class="field">
+            <label>ตำแหน่งโฆษณา</label>
+            <select id="ad_side">
+              <option value="left">ฝั่งซ้าย (Left Sidebar)</option>
+              <option value="right">ฝั่งขวา (Right Sidebar)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>ลิงก์รูปภาพโฆษณา (URL)</label>
+            <input type="url" id="ad_img" placeholder="https://example.com/ad-image.jpg">
+          </div>
+          <div class="field">
+            <label>ลิงก์ปลายทางเมื่อคลิก (เว้นว่างได้ถ้าไม่มี)</label>
+            <input type="url" id="ad_link" placeholder="https://shopee.co.th/...">
+          </div>
+          <button class="btn-add" onclick="addAd()" style="background:#1ce783; color:#111;">+ เพิ่มป้ายโฆษณา</button>
+        </div>
+      </details>
+      
+    </div>
+
+    <div class="controls-bar">
+      <div class="filter-row">
+        <span class="filter-label">แพลตฟอร์ม:</span>
+        <button class="pill active" data-platform="all">ทั้งหมด</button>
+        <button class="pill" data-platform="netflix">Netflix</button>
+        <button class="pill" data-platform="disney">Disney+</button>
+        <button class="pill" data-platform="hbo">HBO Max</button>
+        <button class="pill" data-platform="prime">Prime</button>
+        <button class="pill" data-platform="apple">Apple TV+</button>
+        <button class="pill" data-platform="hulu">Hulu</button>
+        <button class="pill" data-platform="youtube">YouTube</button>
+        <button class="pill" data-platform="other">อื่นๆ</button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      พบข้อมูลทั้งหมด <span id="countNum">0</span> เรื่อง
+    </div>
+
+    <div class="grid" id="movieGrid"></div>
+
+  </main>
+
+  <aside class="sidebar" id="sidebarRight"></aside>
+
+</div> 
+
+
+<div class="overlay" id="loginModal">
+  <div class="modal" style="max-width: 400px;">
+    <h3>🔒 เข้าสู่ระบบ Admin</h3>
+    <div class="field">
+      <label>ชื่อผู้ใช้ (Username)</label>
+      <input type="text" id="login_user" placeholder="เช่น Admin1">
+    </div>
+    <div class="field">
+      <label>รหัสผ่าน (Password)</label>
+      <input type="password" id="login_pass" placeholder="******">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeLoginModal()">ยกเลิก</button>
+      <button class="btn-save" onclick="processLogin()">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="editOverlay">
+  <div class="modal">
+    <h3>✏️ แก้ไขข้อมูลหนัง</h3>
+    <input type="hidden" id="e_id">
+    <div class="form-grid">
+      <div class="field" style="grid-column:1/-1">
+        <label>ชื่อเรื่อง *</label>
+        <input type="text" id="e_title">
+      </div>
+      <div class="field" style="grid-column:1/-1">
+        <label>ลิงก์รูปหน้าปก (URL)</label>
+        <input type="url" id="e_poster">
+      </div>
+      <div class="field">
+        <label>ชื่อภาษาไทย</label>
+        <input type="text" id="e_title_th">
+      </div>
+      <div class="field">
+        <label>ปีที่ออกฉาย</label>
+        <input type="number" id="e_year">
+      </div>
+      <div class="field">
+        <label>หมวดหมู่</label>
+        <select id="e_genre">
+          <option value="">-- เลือก --</option>
+          <option>Action</option><option>Comedy</option><option>Drama</option>
+          <option>Horror</option><option>Romance</option><option>Sci-Fi</option>
+          <option>Thriller</option><option>Animation</option><option>Documentary</option>
+          <option>Fantasy</option><option>Crime</option><option>Series</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>ประเทศ</label>
+        <input type="text" id="e_country">
+      </div>
+    </div>
+    
+    <div class="field">
+      <label>เสียงพากย์ที่มี (Audio)</label>
+      <div class="checkbox-group" id="editDubCBs">
+        <label class="plat-cb"><input type="checkbox" value="TH">ไทย (TH)</label>
+        <label class="plat-cb"><input type="checkbox" value="EN">อังกฤษ (EN)</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>แพลตฟอร์ม</label>
+      <div class="checkbox-group" id="editPlatCBs">
+        <label class="plat-cb"><input type="checkbox" value="netflix">Netflix</label>
+        <label class="plat-cb"><input type="checkbox" value="disney">Disney+</label>
+        <label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label>
+        <label class="plat-cb"><input type="checkbox" value="prime">Prime</label>
+        <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
+        <label class="plat-cb"><input type="checkbox" value="hulu">Hulu</label>
+        <label class="plat-cb"><input type="checkbox" value="youtube">YouTube</label>
+        <label class="plat-cb"><input type="checkbox" value="other">อื่นๆ</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeEditModal()">ยกเลิก</button>
+      <button class="btn-save" onclick="saveEdit()">บันทึกการแก้ไข</button>
+    </div>
+  </div>
+</div>
+
+<footer>ข้อมูลถูกบันทึกไว้ในเบราว์เซอร์ของคุณ (localStorage) | สร้างด้วย ❤️ โดย dootee</footer>
+
+<script>
+// ป้องกัน Error หากเบราว์เซอร์บล็อกการเข้าถึง Storage
+let isAdmin = false;
+try {
+  isAdmin = sessionStorage.getItem('dootee_admin') === 'true'; 
+} catch (error) {
+  console.warn("ไม่สามารถใช้งาน Session Storage ได้");
+}
+
+const ADMIN_ACCOUNTS = {
+  'Admin1': 'X7yB9p', 'Admin2': 'm2Kq4N', 'Admin3': 'R5wJ8c', 'Admin4': 't9Vz1L', 'Admin5': 'H3fM6d',
+  'Admin6': 'p8Nc2Q', 'Admin7': 'W4jX7k', 'Admin8': 'b6Gv9T', 'Admin9': 'F1hP5m', 'Admin10': 'y3Ds8R'
+};
+
+function openLoginModal() {
+  if (isAdmin) {
+    isAdmin = false;
+    try { sessionStorage.removeItem('dootee_admin'); } catch(e){}
+    updateAdminUI(); render(); renderAds();
+  } else {
+    document.getElementById('loginModal').classList.add('open');
+  }
+}
+
+function closeLoginModal() {
+  document.getElementById('loginModal').classList.remove('open');
+  document.getElementById('login_user').value = '';
+  document.getElementById('login_pass').value = '';
+}
+
+function processLogin() {
+  const u = document.getElementById('login_user').value.trim();
+  const p = document.getElementById('login_pass').value.trim();
+  if (ADMIN_ACCOUNTS[u] && ADMIN_ACCOUNTS[u] === p) {
+    isAdmin = true;
+    try { sessionStorage.setItem('dootee_admin', 'true'); } catch(e){}
+    closeLoginModal(); updateAdminUI(); render(); renderAds();
+  } else {
+    alert('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+  }
+}
+
+function updateAdminUI() {
+  const btn = document.getElementById('authBtn');
+  const panel = document.getElementById('adminPanel');
+  if (isAdmin) {
+    btn.textContent = 'ออกจากระบบ';
+    btn.classList.add('logged-in');
+    panel.style.display = 'flex';
+  } else {
+    btn.textContent = 'Admin Login';
+    btn.classList.remove('logged-in');
+    panel.style.display = 'none';
+  }
+}
+
+// ADS SYSTEM
+const ADS_KEY = 'dootee_ads_data';
+let ads = [];
+try {
+  const parsedAds = JSON.parse(localStorage.getItem(ADS_KEY));
+  if (Array.isArray(parsedAds)) ads = parsedAds;
+} catch(e) {}
+
+function saveAds() {
+  try { localStorage.setItem(ADS_KEY, JSON.stringify(ads)); } catch(e){}
+}
+
+function addAd() {
+  if(!isAdmin) return;
+  const side = document.getElementById('ad_side').value;
+  const img = document.getElementById('ad_img').value.trim();
+  const link = document.getElementById('ad_link').value.trim();
+  if(!img) return alert('กรุณาใส่ลิงก์รูปภาพ');
+
+  ads.push({ id: Date.now(), side, img, link });
+  saveAds();
+  document.getElementById('ad_img').value = '';
+  document.getElementById('ad_link').value = '';
+  document.getElementById('addAdDetails').removeAttribute('open');
+  renderAds();
+}
+
+function deleteAd(id) {
+  if(!isAdmin) return;
+  if(!confirm('ลบโฆษณานี้?')) return;
+  ads = ads.filter(a => a.id !== id);
+  saveAds(); renderAds();
+}
+
+function renderAds() {
+  const left = document.getElementById('sidebarLeft');
+  const right = document.getElementById('sidebarRight');
+  
+  const generateAdHTML = (sideName) => {
+    const sideAds = ads.filter(a => a.side === sideName);
+    if(sideAds.length === 0) {
+      return isAdmin ? `<div class="ad-item" style="border:1px dashed var(--muted); background:transparent;">พื้นที่โฆษณา<br>(${sideName})</div>` : '';
+    }
+    return sideAds.map(a => `
+      <div class="ad-item">
+        ${a.link ? `<a href="${a.link}" target="_blank" style="display:block;width:100%;height:100%">` : ''}
+        <img src="${a.img}" onerror="this.style.display='none'">
+        ${a.link ? `</a>` : ''}
+        ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd(${a.id})">ลบ</button>` : ''}
+      </div>
+    `).join('');
+  };
+
+  if(left) left.innerHTML = generateAdHTML('left');
+  if(right) right.innerHTML = generateAdHTML('right');
+}
+
+// MOVIE SYSTEM
+const MOVIES_KEY = 'dootee_movies_v6';
+const sampleMovies = [
+  { id: 1, title: "Oppenheimer", title_th: "ออพเพนไฮเมอร์", year: 2023, genre: "Drama", country: "US", poster: "https://www.themoviedb.org/t/p/w600_and_h900_bestv2/8Gxv2mYmUjZGWpUaC0nU3jsmbiX.jpg", platforms: ["prime","other"], dubs: ["TH", "EN"] },
+  { id: 2, title: "Wednesday", title_th: "เวนสเดย์", year: 2022, genre: "Horror", country: "US", poster: "https://www.themoviedb.org/t/p/w600_and_h900_bestv2/9PFonB9REmISpS686vMv0o9PMfS.jpg", platforms: ["netflix"], dubs: ["TH", "EN"] },
+  { id: 3, title: "The Bear", title_th: "เดอะ แบร์", year: 2023, genre: "Drama", country: "US", poster: "https://www.themoviedb.org/t/p/w600_and_h900_bestv2/mE3sJbw5GEJg3X0xNq7B7sELXF.jpg", platforms: ["disney"], dubs: ["EN"] },
+  { id: 4, title: "Top Gun: Maverick", title_th: "ท็อปกัน: มาเวอริก", year: 2022, genre: "Action", country: "US", poster: "https://www.themoviedb.org/t/p/w600_and_h900_bestv2/62HCnUTziyWcpDaBO2i1DX17ljH.jpg", platforms: ["prime","apple"], dubs: ["TH", "EN"] }
+];
+
+function loadMovies() {
+  try {
+    const raw = localStorage.getItem(MOVIES_KEY);
+    if(raw) {
+      const parsed = JSON.parse(raw);
+      if(Array.isArray(parsed)) return parsed;
+    }
+  } catch(e) {}
+  return sampleMovies;
+}
+
+function saveMovies(m) {
+  try { localStorage.setItem(MOVIES_KEY, JSON.stringify(m)); } catch(e){}
+}
+
+let movies = loadMovies();
+let filterPlatform = 'all';
+let searchQ = '';
+
+function render() {
+  const grid = document.getElementById('movieGrid');
+  let filtered = movies.filter(m => {
+    const q = searchQ.toLowerCase();
+    const matchSearch = !q || m.title.toLowerCase().includes(q) || (m.title_th && m.title_th.toLowerCase().includes(q)) || (m.genre && m.genre.toLowerCase().includes(q)) || String(m.year).includes(q);
+    const matchPlatform = filterPlatform === 'all' || (m.platforms && m.platforms.includes(filterPlatform));
+    return matchSearch && matchPlatform;
+  });
+
+  document.getElementById('countNum').textContent = filtered.length;
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; color:var(--muted); border:1px dashed var(--border); border-radius:12px;">ไม่พบผลลัพธ์</div>`;
+    return;
+  }
+
+  const platLabel = { netflix:'Netflix', disney:'Disney+', hbo:'HBO Max', prime:'Prime Video', apple:'Apple TV+', hulu:'Hulu', youtube:'YouTube', other:'อื่นๆ' };
+
+  grid.innerHTML = filtered.map((m, i) => `
+    <div class="card" style="animation-delay:${Math.min(i*0.04, 0.4)}s">
+      <div class="card-poster">
+        ${m.poster ? `<img src="${m.poster}" onerror="this.style.display='none'">` : `<div class="no-poster">ไม่มีหน้าปก</div>`}
+      </div>
+      <div class="card-top">
+        <div class="movie-title">${m.title}</div>
+        ${m.title_th ? `<div class="movie-th">${m.title_th}</div>` : ''}
+        ${m.year ? `<div class="movie-year">${m.year}</div>` : ''}
+      </div>
+      <div class="movie-meta">
+        ${m.genre ? `<span class="badge">${m.genre}</span>` : ''}
+        ${m.country ? `<span class="badge">${m.country}</span>` : ''}
+      </div>
+      <div class="platforms">
+        ${(m.platforms||[]).map(p => `<span class="platform-tag ${p}">${platLabel[p]||p}</span>`).join('')}
+      </div>
+      ${m.dubs && m.dubs.length > 0 ? `
+      <div class="audio-meta">
+        <span class="audio-label">🎙️ เสียง:</span>
+        ${m.dubs.map(d => `<span class="audio-tag">${d === 'TH' ? 'ไทย' : d === 'EN' ? 'อังกฤษ' : d}</span>`).join('')}
+      </div>` : ''}
+
+      ${isAdmin ? `
+      <div class="card-actions">
+        <button class="btn-edit" onclick="openEdit(${m.id})">แก้ไข</button>
+        <button class="btn-del"  onclick="deleteMovie(${m.id})">ลบ</button>
+      </div>` : ''}
+    </div>
+  `).join('');
+}
+
+document.getElementById('searchInput').addEventListener('input', e => { searchQ = e.target.value; render(); });
+document.querySelectorAll('.pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterPlatform = btn.dataset.platform;
+    render();
+  });
+});
+
+function initCBs(container) {
+  if(!container) return;
+  container.querySelectorAll('.plat-cb').forEach(label => {
+    const cb = label.querySelector('input');
+    cb.addEventListener('change', () => label.classList.toggle('checked', cb.checked));
+  });
+}
+initCBs(document.getElementById('platCBs'));
+initCBs(document.getElementById('editPlatCBs'));
+initCBs(document.getElementById('dubCBs'));
+initCBs(document.getElementById('editDubCBs'));
+
+function addMovie() {
+  if(!isAdmin) return;
+  const title = document.getElementById('f_title').value.trim();
+  if (!title) return alert('กรุณาระบุชื่อเรื่อง');
+  const platforms = [...document.querySelectorAll('#platCBs input:checked')].map(c => c.value);
+  if (!platforms.length) return alert('กรุณาเลือกแพลตฟอร์มอย่างน้อย 1 รายการ');
+
+  const movie = {
+    id: Date.now(), title,
+    title_th: document.getElementById('f_title_th').value.trim(),
+    poster: document.getElementById('f_poster').value.trim(),
+    year: parseInt(document.getElementById('f_year').value) || null,
+    genre: document.getElementById('f_genre').value,
+    country: document.getElementById('f_country').value.trim(),
+    platforms,
+    dubs: [...document.querySelectorAll('#dubCBs input:checked')].map(c => c.value)
+  };
+  movies.unshift(movie); saveMovies(movies);
+  
+  ['f_title','f_title_th','f_poster','f_year','f_country'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_genre').value = '';
+  document.querySelectorAll('#platCBs input, #dubCBs input').forEach(cb => { cb.checked = false; cb.closest('.plat-cb').classList.remove('checked'); });
+  document.getElementById('addDetails').removeAttribute('open');
+  render();
+}
+
+function deleteMovie(id) {
+  if(!isAdmin || !confirm('ยืนยันการลบ?')) return;
+  movies = movies.filter(m => m.id !== id);
+  saveMovies(movies); render();
+}
+
+function openEdit(id) {
+  if(!isAdmin) return;
+  const m = movies.find(x => x.id === id);
+  if(!m) return;
+  document.getElementById('e_id').value = id;
+  document.getElementById('e_title').value = m.title;
+  document.getElementById('e_title_th').value = m.title_th || '';
+  document.getElementById('e_poster').value = m.poster || '';
+  document.getElementById('e_year').value = m.year || '';
+  document.getElementById('e_genre').value = m.genre || '';
+  document.getElementById('e_country').value = m.country || '';
+  
+  document.querySelectorAll('#editPlatCBs input').forEach(cb => {
+    cb.checked = (m.platforms||[]).includes(cb.value);
+    cb.closest('.plat-cb').classList.toggle('checked', cb.checked);
+  });
+  document.querySelectorAll('#editDubCBs input').forEach(cb => {
+    cb.checked = (m.dubs||[]).includes(cb.value);
+    cb.closest('.plat-cb').classList.toggle('checked', cb.checked);
+  });
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+function closeEditModal() { document.getElementById('editOverlay').classList.remove('open'); }
+
+function saveEdit() {
+  if(!isAdmin) return;
+  const id = parseInt(document.getElementById('e_id').value);
+  const title = document.getElementById('e_title').value.trim();
+  if (!title) return alert('กรุณาระบุชื่อเรื่อง');
+  const platforms = [...document.querySelectorAll('#editPlatCBs input:checked')].map(c => c.value);
+  if (!platforms.length) return alert('กรุณาเลือกแพลตฟอร์มอย่างน้อย 1 รายการ');
+  
+  const idx = movies.findIndex(m => m.id === id);
+  if(idx === -1) return;
+  movies[idx] = { 
+    ...movies[idx], title, 
+    title_th: document.getElementById('e_title_th').value.trim(),
+    poster: document.getElementById('e_poster').value.trim(),
+    year: parseInt(document.getElementById('e_year').value) || null,
+    genre: document.getElementById('e_genre').value,
+    country: document.getElementById('e_country').value.trim(), 
+    platforms,
+    dubs: [...document.querySelectorAll('#editDubCBs input:checked')].map(c => c.value)
+  };
+  saveMovies(movies);
+  closeEditModal(); render();
+}
+
+// Initial Run
+updateAdminUI();
+render();
+renderAds();
+</script>
+</body>
+</html>
