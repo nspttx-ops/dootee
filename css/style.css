@@ -1,0 +1,86 @@
+/* ตั้งค่าพื้นฐาน */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #121212;
+    color: #ffffff;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+header h1 {
+    font-size: 2.5rem;
+    color: #e50914; /* สีแดงสไตล์แอปดูหนัง */
+    margin-bottom: 10px;
+}
+
+.filter-buttons {
+    margin-top: 20px;
+}
+
+.filter-buttons button {
+    background-color: #333;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    margin: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.filter-buttons button:hover {
+    background-color: #e50914;
+}
+
+/* จัดรูปแบบ Grid สำหรับแสดงการ์ดหนัง */
+.movie-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* สไตล์ของการ์ดหนังแต่ละเรื่อง */
+.movie-card {
+    background-color: #1e1e1e;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+}
+
+.movie-card:hover {
+    transform: translateY(-5px);
+}
+
+.movie-card h3 {
+    margin-bottom: 5px;
+    color: #fff;
+}
+
+.movie-card p {
+    font-size: 0.9rem;
+    color: #aaa;
+    margin-bottom: 5px;
+}
+
+.platform-tag {
+    display: inline-block;
+    background-color: #e50914;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    margin-top: 10px;
+}
