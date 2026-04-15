@@ -6,7 +6,6 @@
 <title>dootee — ดูอะไร ดูที่ไหน dootee นี่</title>
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-<!-- ✅ Firebase ต้องโหลดก่อน script.js เสมอ -->
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
@@ -16,22 +15,32 @@
 </head>
 <body>
 
-<!-- ══════ STICKY HEADER ══════ -->
 <header id="mainHeader">
-  <div class="logo-sm">doo<span>tee</span><small>ดูอะไร ดูที่ไหน</small></div>
+  <div class="logo-sm" onclick="goHome()">doo<span>tee</span></div>
+  
+  <div class="header-types">
+    <button class="type-btn active" data-type="all">ทั้งหมด</button>
+    <button class="type-btn" data-type="movie">ภาพยนตร์</button>
+    <button class="type-btn" data-type="series">ซีรีส์</button>
+    <button class="type-btn" data-type="animation">อนิเมะ/การ์ตูน</button>
+    <button class="type-btn" data-type="documentary">สารคดี</button>
+  </div>
+
   <div id="headerSearch">
     <svg class="h-search-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input type="text" id="headerSearchInput" placeholder="ค้นหาหนัง...">
     <div class="ac-list" id="headerAC"></div>
   </div>
+  
   <div class="header-right">
-    <button id="authBtn" class="auth-btn">Admin Login</button>
+    <button id="authBtn" class="auth-btn" title="Admin Login">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
   </div>
 </header>
 
-<!-- ══════ HERO ══════ -->
 <section id="heroSection">
-  <div class="hero-logo">doo<span>tee</span></div>
+  <div class="hero-logo" onclick="goHome()" style="cursor:pointer;">doo<span>tee</span></div>
   <div class="hero-tagline">🎬 ดูอะไร ดูที่ไหน dootee นี่</div>
 
   <div class="hero-search-wrap">
@@ -58,7 +67,6 @@
   </div>
 </section>
 
-<!-- ══════ BROWSE ══════ -->
 <div id="browseSection">
   <div class="browse-layout">
 
@@ -66,11 +74,9 @@
 
     <main class="browse-main">
 
-      <!-- ADMIN PANEL -->
       <div class="admin-panel" id="adminPanel">
         <div class="panel-title">⚙️ Admin Panel</div>
 
-        <!-- Bulk CSV Upload -->
         <div id="migrateArea" class="migrate-area" style="display:none">
           <div class="migrate-title">📂 อัปโหลดข้อมูลหนังจำนวนมาก (.CSV)</div>
           <p class="migrate-desc">เตรียมใน Excel → บันทึกเป็น .csv → อัปโหลดทีละหลายร้อยเรื่อง<br>
@@ -79,10 +85,8 @@
           <button class="btn-primary btn-upload" onclick="handleCSVUpload()">🚀 อัปโหลดเข้า Firebase ทันที</button>
         </div>
 
-        <!-- Bulk Select -->
         <button class="btn-select-all" id="btnSelectAll" onclick="selectAllVisible()">☑️ เลือกทั้งหมดบนหน้าจอ (Bulk Delete)</button>
 
-        <!-- Add Movie Form -->
         <details class="adm-detail" id="addDetails">
           <summary>➕ เพิ่มหนัง / ซีรีส์ (แมนวล)</summary>
           <div class="form-body">
@@ -134,7 +138,6 @@
           </div>
         </details>
 
-        <!-- Ads Form -->
         <details class="adm-detail" id="addAdDetails">
           <summary>🖼️ จัดการโฆษณา Sidebar</summary>
           <div class="form-body">
@@ -161,9 +164,7 @@
           </div>
         </details>
       </div>
-      <!-- END ADMIN PANEL -->
 
-      <!-- CONTROLS -->
       <div class="controls-bar">
         <button class="mob-filter-btn" onclick="toggleMobFilter()">🔍 กรองตาม Platform ▾</button>
         <div class="filter-scroll mob-hidden" id="platformFilters">
@@ -185,19 +186,15 @@
         <div>ข้อมูลในระบบ <strong id="countNum">0</strong> เรื่อง</div>
         <div class="sort-bar">
           <span class="sort-lbl">เรียง:</span>
-          <button class="sort-btn active" data-sort="default">ล่าสุด</button>
-          <button class="sort-btn" data-sort="title_en">ชื่อ A–Z <span>↑</span></button>
-          <button class="sort-btn" data-sort="title_th">ชื่อไทย <span>↑</span></button>
-          <button class="sort-btn" data-sort="year">ปี <span>↓</span></button>
+          <button class="sort-btn active" data-sort="year">ปี <span>↓</span></button>
+          <button class="sort-btn" data-sort="title_th">ชื่อภาษาไทย <span></span></button>
+          <button class="sort-btn" data-sort="title_en">ชื่อภาษาอังกฤษ <span></span></button>
         </div>
       </div>
 
-      <!-- Mobile Ads (แสดงเฉพาะมือถือ) -->
       <div class="mobile-ads" id="mobileAds"></div>
 
       <div class="grid" id="movieGrid">
-        <div class="skel"></div><div class="skel"></div>
-        <div class="skel"></div><div class="skel"></div>
         <div class="skel"></div><div class="skel"></div>
         <div class="skel"></div><div class="skel"></div>
       </div>
@@ -211,24 +208,20 @@
   </div>
 </div>
 
-<!-- FOOTER -->
 <footer>
   <div class="visitor-badge">👁️ ผู้เข้าชม: <strong id="visitorNum">...</strong> คน</div>
   <div id="loadStatus" style="margin-top:6px;font-size:.78rem">กำลังโหลด...</div>
   <div style="margin-top:10px">สร้างด้วย ❤️ โดย dootee · ขับเคลื่อนด้วย Firebase</div>
 </footer>
 
-<!-- TOAST -->
 <div id="toast" class="toast"></div>
 
-<!-- BULK ACTION BAR (ลอยด้านล่าง) -->
 <div id="bulkActionBar" class="bulk-action-bar">
   <span style="font-size:.9rem">เลือกแล้ว <strong id="bulkCount">0</strong> เรื่อง</span>
   <button class="bulk-btn-cancel" onclick="clearSelection()">ยกเลิก</button>
   <button class="bulk-btn-del" onclick="bulkDeleteSelected()">🗑️ ลบทั้งหมด</button>
 </div>
 
-<!-- LOGIN MODAL -->
 <div class="overlay" id="loginModal">
   <div class="modal" style="max-width:380px">
     <h3>🔒 เข้าสู่ระบบ Admin</h3>
@@ -247,7 +240,6 @@
   </div>
 </div>
 
-<!-- EDIT MOVIE MODAL -->
 <div class="overlay" id="editOverlay">
   <div class="modal">
     <h3>✏️ แก้ไขข้อมูลหนัง</h3>
@@ -303,29 +295,6 @@
     </div>
   </div>
 </div>
-
-<!--
-  ╔══════════════════════════════════════════════════════╗
-  ║  FIRESTORE SECURITY RULES (Firebase Console > Firestore > Rules)
-  ║
-  ║  rules_version = '2';
-  ║  service cloud.firestore {
-  ║    match /databases/{database}/documents {
-  ║      match /movies/{doc} {
-  ║        allow read: if true;
-  ║        allow write: if request.auth != null;
-  ║      }
-  ║      match /ads/{doc} {
-  ║        allow read: if true;
-  ║        allow write: if request.auth != null;
-  ║      }
-  ║      match /stats/{doc} {
-  ║        allow read, write: if true;
-  ║      }
-  ║    }
-  ║  }
-  ╚══════════════════════════════════════════════════════╝
--->
 
 <script src="js/script.js"></script>
 </body>
