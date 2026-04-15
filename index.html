@@ -42,9 +42,10 @@
     <span class="hint-chip" data-platform="disney"><span class="plogo disney">D+</span>Disney+</span>
     <span class="hint-chip" data-platform="hbo"><span class="plogo hbo">HBO</span>Max</span>
     <span class="hint-chip" data-platform="prime"><span class="plogo prime">▶</span>Prime</span>
-    <span class="hint-chip" data-platform="apple"><span class="plogo apple">TV+</span>Apple</span>
-    <span class="hint-chip" data-platform="hulu"><span class="plogo hulu">hulu</span></span>
-    <span class="hint-chip" data-platform="youtube"><span class="plogo youtube">▶</span>YouTube</span>
+    <span class="hint-chip" data-platform="viu"><span class="plogo viu">Viu</span>Viu</span>
+    <span class="hint-chip" data-platform="wetv"><span class="plogo wetv">We</span>WeTV</span>
+    <span class="hint-chip" data-platform="iqiyi"><span class="plogo iqiyi">iQ</span>iQIYI</span>
+    <span class="hint-chip" data-platform="bilibili"><span class="plogo bilibili">Bi</span>Bilibili</span>
   </div>
 
   <div class="scroll-hint">
@@ -100,7 +101,17 @@
             <div class="field" style="margin-top:10px">
               <label>Platform ที่ดูได้ *</label>
               <div class="cb-group" id="platCBs">
-                <label class="plat-cb"><input type="checkbox" value="netflix">Netflix</label><label class="plat-cb"><input type="checkbox" value="disney">Disney+</label><label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label><label class="plat-cb"><input type="checkbox" value="prime">Prime Video</label>
+                <label class="plat-cb"><input type="checkbox" value="netflix">Netflix</label>
+                <label class="plat-cb"><input type="checkbox" value="disney">Disney+</label>
+                <label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label>
+                <label class="plat-cb"><input type="checkbox" value="prime">Prime Video</label>
+                <label class="plat-cb"><input type="checkbox" value="viu">Viu</label>
+                <label class="plat-cb"><input type="checkbox" value="wetv">WeTV</label>
+                <label class="plat-cb"><input type="checkbox" value="iqiyi">iQIYI</label>
+                <label class="plat-cb"><input type="checkbox" value="bilibili">Bilibili</label>
+                <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
+                <label class="plat-cb"><input type="checkbox" value="youtube">YouTube</label>
+                <label class="plat-cb"><input type="checkbox" value="other">อื่นๆ</label>
               </div>
             </div>
             <button class="btn-primary" style="margin-top:14px;width:100%" onclick="addMovie()">💾 บันทึกข้อมูลหนัง</button>
@@ -131,7 +142,7 @@
             <button class="btn-primary" style="margin-top:14px;width:100%;background:#1ce783;color:#000" onclick="addAd()">➕ เพิ่มโฆษณา (จำกัดฝั่งละ 5 รูป)</button>
           </div>
         </details>
-        </div>
+      </div>
 
       <div class="controls-bar">
         <button class="mob-filter-btn" onclick="toggleMobFilter()">🔍 ตัวกรอง & แพลตฟอร์ม</button>
@@ -141,6 +152,10 @@
           <button class="pill" data-platform="disney"><span class="plogo disney">D+</span> Disney+</button>
           <button class="pill" data-platform="hbo"><span class="plogo hbo">HBO</span> HBO Max</button>
           <button class="pill" data-platform="prime"><span class="plogo prime">▶</span> Prime</button>
+          <button class="pill" data-platform="viu"><span class="plogo viu">Viu</span> Viu</button>
+          <button class="pill" data-platform="wetv"><span class="plogo wetv">We</span> WeTV</button>
+          <button class="pill" data-platform="iqiyi"><span class="plogo iqiyi">iQ</span> iQIYI</button>
+          <button class="pill" data-platform="bilibili"><span class="plogo bilibili">Bi</span> Bilibili</button>
         </div>
       </div>
 
@@ -201,6 +216,7 @@
         <div class="field"><label>หมวดหมู่</label><input type="text" id="e_genre"></div>
         <div class="field"><label>ประเทศ</label><input type="text" id="e_country"></div>
       </div>
+      
       <div class="field">
         <label>เสียงพากย์ / ซับไตเติ้ล</label>
         <div class="cb-group" id="editDubCBs">
@@ -212,9 +228,20 @@
           <label class="plat-cb"><input type="checkbox" value="ซับไทย">📝 ซับไทย</label>
         </div>
       </div>
+
       <div class="field" style="margin-top:10px"><label>Platform ที่ดูได้ *</label>
         <div class="cb-group" id="editPlatCBs">
-          <label class="plat-cb"><input type="checkbox" value="netflix">Netflix</label><label class="plat-cb"><input type="checkbox" value="disney">Disney+</label><label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label><label class="plat-cb"><input type="checkbox" value="prime">Prime</label>
+          <label class="plat-cb"><input type="checkbox" value="netflix">Netflix</label>
+          <label class="plat-cb"><input type="checkbox" value="disney">Disney+</label>
+          <label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label>
+          <label class="plat-cb"><input type="checkbox" value="prime">Prime</label>
+          <label class="plat-cb"><input type="checkbox" value="viu">Viu</label>
+          <label class="plat-cb"><input type="checkbox" value="wetv">WeTV</label>
+          <label class="plat-cb"><input type="checkbox" value="iqiyi">iQIYI</label>
+          <label class="plat-cb"><input type="checkbox" value="bilibili">Bilibili</label>
+          <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
+          <label class="plat-cb"><input type="checkbox" value="youtube">YouTube</label>
+          <label class="plat-cb"><input type="checkbox" value="other">อื่นๆ</label>
         </div>
       </div>
     </div>
