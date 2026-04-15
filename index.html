@@ -59,8 +59,16 @@
     <aside class="sidebar" id="sidebarLeft"></aside>
 
     <main class="browse-main">
+      
       <div class="admin-panel" id="adminPanel">
         <div class="panel-title">⚙️ Admin Panel</div>
+
+        <div id="migrateArea" style="display:none; padding: 16px; background: rgba(239, 68, 68, 0.1); border: 1px dashed red; margin-bottom: 20px; border-radius: 8px;">
+          <p style="color: #f87171; font-size: 0.85rem; margin-bottom: 10px;">⚠️ โซนอันตราย: นำเข้าข้อมูลจากไฟล์ data/movies.csv ไปยัง Firebase (ทำแค่ครั้งเดียวเท่านั้นเพื่อป้องกันข้อมูลซ้ำ)</p>
+          <button onclick="migrateCSVtoFirestore()" style="padding: 10px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+            🚀 อัปโหลดหนังทั้งหมดจาก CSV ขึ้น Firebase
+          </button>
+        </div>
         <details class="adm-detail" id="addDetails">
           <summary>➕ เพิ่มหนัง / ซีรีส์ (ผ่านเว็บ)</summary>
           <div class="form-body">
@@ -143,7 +151,6 @@
           </div>
         </details>
       </div>
-
       <div class="controls-bar">
         <button class="mob-filter-btn" onclick="toggleMobFilter()">🔍 ตัวกรอง & แพลตฟอร์ม</button>
         <div class="filter-scroll mob-hidden" id="platformFilters">
