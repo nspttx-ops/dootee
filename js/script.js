@@ -69,7 +69,6 @@ function setAdmin(val) {
 
   if (btn) {
     btn.classList.toggle('logged-in', val);
-    // เปลี่ยนไอคอนตามสถานะ
     if (val) {
       btn.innerHTML = `<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
     } else {
@@ -416,7 +415,7 @@ function resetCBs(ids) {
 }
 
 /* ══════════════════════════════════════════
-   ADS SYSTEM
+   ADS SYSTEM (โปร่งแสง และบังคับ 2 แบนเนอร์มือถือ)
 ══════════════════════════════════════════ */
 async function addAd() {
   if (!isAdmin) return;
@@ -427,6 +426,10 @@ async function addAd() {
 
   if (!img_sq && !img_banner) {
     toast('กรุณาใส่รูปอย่างน้อย 1 แบบ', 'err'); return;
+  }
+  const urlOk = u => !u || u.startsWith('http');
+  if (!urlOk(img_sq) || !urlOk(img_banner)) {
+    toast('URL ไม่ถูกต้อง', 'err'); return;
   }
 
   const sideAds = ads.filter(a => a.side === side);
@@ -461,11 +464,18 @@ async function deleteAd(id) {
 }
 
 function renderAds() {
+  // Placeholder โปร่งแสง ที่แสดงให้ผู้ใช้ทุกคนเห็น
+  const defaultPlaceholder = `<div class="ad-placeholder">ติดต่อโฆษณา<br><span style="color:var(--accent);font-weight:600;">dootee.info@gmail.com</span></div>`;
+
+  // PC Sidebar (จัตุรัส 1:1, จำกัด 5 รูป/ข้าง)
   const drawPC = side => {
     const list = ads.filter(a => a.side === side && a.img_sq).slice(0, 5);
+    
+    // ถ้าไม่มีโฆษณาเลย ให้โชว์กรอบโปร่งแสง 1 กรอบ
     if (!list.length) {
-      return isAdmin ? `<div class="ad-item ad-sq"><div class="ad-placeholder">พื้นที่โฆษณา ${side}<br>(PC 1:1)</div></div>` : '';
+      return `<div class="ad-item ad-sq">${defaultPlaceholder}</div>`;
     }
+
     return list.map(a => `
       <div class="ad-item ad-sq">
         ${a.link ? `<a href="${a.link}" target="_blank" rel="noopener"></a>` : ''}
@@ -479,22 +489,29 @@ function renderAds() {
   if (l) l.innerHTML = drawPC('left');
   if (r) r.innerHTML = drawPC('right');
 
+  // Mobile Banner (แนวนอน บังคับให้มี 2 กรอบเสมอ)
   const m = document.getElementById('mobileAds');
   if (!m) return;
-  const bannerList = ads.filter(a => a.img_banner || a.img_sq);
-  if (!bannerList.length) {
-    m.innerHTML = isAdmin ? `<div class="ad-item ad-banner"><div class="ad-placeholder">พื้นที่โฆษณา Mobile Banner</div></div>` : '';
-    return;
+  const bannerList = ads.filter(a => a.img_banner || a.img_sq).slice(0, 2);
+  
+  let mobileHtml = '';
+  // สร้าง 2 กรอบเสมอ
+  for (let i = 0; i < 2; i++) {
+    if (bannerList[i]) {
+      const a = bannerList[i];
+      const imgUrl = a.img_banner || a.img_sq;
+      mobileHtml += `
+        <div class="ad-item ad-banner">
+          ${a.link ? `<a href="${a.link}" target="_blank" rel="noopener"></a>` : ''}
+          <img src="${imgUrl}" alt="ad" onerror="this.style.opacity='.15'">
+          ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
+        </div>`;
+    } else {
+      // ถ้าไม่มีโฆษณามาเติม ให้ใส่กรอบโปร่งแสง
+      mobileHtml += `<div class="ad-item ad-banner">${defaultPlaceholder}</div>`;
+    }
   }
-  m.innerHTML = bannerList.map(a => {
-    const imgUrl = a.img_banner || a.img_sq;
-    return `
-      <div class="ad-item ad-banner">
-        ${a.link ? `<a href="${a.link}" target="_blank" rel="noopener"></a>` : ''}
-        <img src="${imgUrl}" alt="ad" onerror="this.style.opacity='.15'">
-        ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
-      </div>`;
-  }).join('');
+  m.innerHTML = mobileHtml;
 }
 
 /* ══════════════════════════════════════════
@@ -516,7 +533,6 @@ function getFilteredAndSorted() {
       || String(m.year||'').includes(q);
     const mp = filterPlatform === 'all' || (m.platforms||[]).includes(filterPlatform);
     
-    // ตรรกะการฟิลเตอร์หมวดหมู่ด้านบน (Type Filter)
     let mt = true;
     const g = (m.genre || '').toLowerCase();
     if (filterType === 'series') mt = g.includes('series') || g.includes('ซีรีส์');
@@ -747,7 +763,6 @@ document.querySelectorAll('.hint-chip').forEach(chip => {
    NAVIGATION (Go Home)
 ══════════════════════════════════════════ */
 function goHome() {
-  // รีเซ็ตค่าการค้นหาและฟิลเตอร์ทั้งหมด
   isBrowse = false;
   searchQ = '';
   filterPlatform = 'all';
@@ -755,11 +770,9 @@ function goHome() {
   sortKey = 'year';
   sortDir = { year: -1, title_th: 1, title_en: 1 };
 
-  // ล้างช่องค้นหา
   if(document.getElementById('heroSearchInput')) document.getElementById('heroSearchInput').value = '';
   if(document.getElementById('headerSearchInput')) document.getElementById('headerSearchInput').value = '';
 
-  // รีเซ็ตปุ่ม UI
   document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.platform === 'all'));
   document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === 'all'));
   document.querySelectorAll('.sort-btn').forEach(b => {
@@ -768,12 +781,10 @@ function goHome() {
     if (ar) ar.textContent = b.dataset.sort === 'year' ? '↓' : '';
   });
 
-  // ซ่อนหน้า Browse และแสดง Hero
   document.getElementById('heroSection')?.classList.remove('collapsed');
   document.getElementById('mainHeader')?.classList.remove('visible');
   document.getElementById('browseSection')?.classList.remove('visible');
 
-  // เลื่อนกลับด้านบนสุด
   window.scrollTo({ top: 0, behavior: 'smooth' });
   render();
 }
@@ -795,14 +806,12 @@ document.addEventListener('touchend', e => {
   const deltaX = touchEndX - touchStartX;
   const deltaY = touchEndY - touchStartY;
 
-  // 1. ปัดจากขอบซ้ายไปขวา (Back to Home)
-  // เริ่มทัชจากขอบจอ (< 40px) และลากไปทางขวามากกว่า 100px (แนวนอน)
+  // 1. ปัดจากซ้ายไปขวา (Back to Home)
   if (touchStartX < 40 && deltaX > 100 && Math.abs(deltaY) < 50) {
     goHome();
   }
 
   // 2. ปัดจากบนลงล่าง (Pull to Refresh)
-  // ต้องอยู่บนสุดของหน้าจอ (scrollY === 0) และลากลงมากกว่า 150px
   if (window.scrollY === 0 && deltaY > 150 && Math.abs(deltaX) < 50) {
     window.location.reload();
   }
