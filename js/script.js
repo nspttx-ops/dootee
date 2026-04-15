@@ -481,4 +481,4 @@ function toggleMobFilter() { document.getElementById('platformFilters')?.classLi
 ['platCBs','dubCBs','editPlatCBs','editDubCBs'].forEach(id => { const el=document.getElementById(id); if(el) el.querySelectorAll('.plat-cb').forEach(l=>{const c=l.querySelector('input'); c.addEventListener('change',()=>l.classList.toggle('checked',c.checked))})});
 
 // สั่งโหลดข้อมูลครั้งแรกตอนเปิดเว็บ
-loadDataFromFirebase();
+loadData();
