@@ -29,10 +29,13 @@ let sortKey  = 'default';
 let sortDir  = {};
 let isBrowse = false;
 
-// ตัวแปรสำหรับ Pagination (Infinite Scroll)
+// Pagination
 let currentPage = 1;
-const itemsPerPage = 24; // แสดงผลทีละ 24 เรื่อง
-let currentFiltered = []; // เก็บข้อมูลที่ผ่านการกรองแล้ว
+const itemsPerPage = 24; 
+let currentFiltered = []; 
+
+// Bulk Action State
+let selectedMovies = new Set();
 
 /* ══════════════════════════════════════════
    TOAST (แจ้งเตือน)
@@ -63,9 +66,10 @@ function setAdmin(val) {
   const panel = document.getElementById('adminPanel');
   if (panel) panel.classList.toggle('open', val);
   
-  // ซ่อน/แสดงส่วนอัปโหลด CSV
   const migrateArea = document.getElementById('migrateArea');
   if (migrateArea) migrateArea.style.display = val ? 'block' : 'none';
+
+  if (!val) clearSelection(); // เคลียร์ที่ติ๊กเลือกไว้ถ้ากดยกเลิก Admin
 
   renderAds();
   render(); 
@@ -97,47 +101,17 @@ function closeLoginModal() {
 function processLogin() {
   const email  = document.getElementById('login_email').value.trim();
   const pass = document.getElementById('login_pass').value;
-  
-  if (!email || !pass) { 
-    toast('กรุณากรอก Email และรหัสผ่านให้ครบ', 'err'); 
-    return; 
-  }
-
+  if (!email || !pass) { toast('กรุณากรอก Email และรหัสผ่าน', 'err'); return; }
   auth.signInWithEmailAndPassword(email, pass)
-    .then(() => { 
-        closeLoginModal(); 
-        toast('เข้าสู่ระบบสำเร็จ ✓', 'ok'); 
-    })
-    .catch((error) => {
-        toast('Email หรือรหัสผ่านผิด', 'err');
-    });
+    .then(() => { closeLoginModal(); toast('เข้าสู่ระบบสำเร็จ ✓', 'ok'); })
+    .catch(() => { toast('Email หรือรหัสผ่านผิด', 'err'); });
 }
 
-document.getElementById('login_pass')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter') processLogin();
-});
-document.getElementById('loginModal')?.addEventListener('click', e => {
-  if (e.target === e.currentTarget) closeLoginModal();
-});
+document.getElementById('login_pass')?.addEventListener('keydown', e => { if (e.key === 'Enter') processLogin(); });
+document.getElementById('loginModal')?.addEventListener('click', e => { if (e.target === e.currentTarget) closeLoginModal(); });
 
 /* ══════════════════════════════════════════
-   VISITOR COUNT
-══════════════════════════════════════════ */
-async function trackVisitor() {
-  try {
-    const ref = db.collection('stats').doc('visitors');
-    await ref.set({ count: firebase.firestore.FieldValue.increment(1) }, { merge: true });
-    const snap = await ref.get();
-    const visitorEl = document.getElementById('visitorNum');
-    if(visitorEl) visitorEl.textContent = (snap.data()?.count || 0).toLocaleString();
-  } catch (err) { 
-      const visitorEl = document.getElementById('visitorNum');
-      if(visitorEl) visitorEl.textContent = '—'; 
-  }
-}
-
-/* ══════════════════════════════════════════
-   LOAD DATA (โหลดข้อมูลจาก Firebase ล้วนๆ)
+   LOAD DATA
 ══════════════════════════════════════════ */
 async function loadData() {
   try {
@@ -149,23 +123,25 @@ async function loadData() {
   try {
     setLoadStatus('กำลังโหลดข้อมูลจากฐานข้อมูล...');
     showSkeletons();
-    
-    // ดึงข้อมูลหนังทั้งหมดจาก Firestore เรียงตามวันที่สร้าง
     const snap = await db.collection('movies').orderBy('createdAt', 'desc').get();
-    
     if (snap.docs.length) {
       movies = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
-    
     setLoadStatus(`ข้อมูลในระบบ ${movies.length} เรื่อง`);
-    render(); // วาดหน้าเว็บ
+    render(); 
   } catch (err) {
     setLoadStatus('❌ โหลดข้อมูลไม่สำเร็จ');
-    showEmpty('ไม่สามารถเชื่อมต่อฐานข้อมูลได้ โปรดตรวจสอบการตั้งค่า Firebase');
-    console.error(err);
+    showEmpty('ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
   }
 
-  trackVisitor();
+  // Track Visitor
+  try {
+    const ref = db.collection('stats').doc('visitors');
+    await ref.set({ count: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+    const vSnap = await ref.get();
+    const visitorEl = document.getElementById('visitorNum');
+    if(visitorEl) visitorEl.textContent = (vSnap.data()?.count || 0).toLocaleString();
+  } catch(e) {}
 }
 
 function setLoadStatus(t) { const el = document.getElementById('loadStatus'); if(el) el.textContent = t; }
@@ -173,41 +149,27 @@ function showSkeletons()  { const grid = document.getElementById('movieGrid'); i
 function showEmpty(msg)   { const grid = document.getElementById('movieGrid'); if(grid) grid.innerHTML = `<div class="empty"><p>⚠️ ${msg}</p></div>`; }
 
 /* ══════════════════════════════════════════
-   BULK UPLOAD: อัปโหลดและอัปเดตข้อมูล (รองรับ Batch ป้องกันเว็บค้าง)
+   BULK UPLOAD (Delete Old & Replace)
 ══════════════════════════════════════════ */
 function handleCSVUpload() {
   const fileInput = document.getElementById('csvUploadInput');
   const file = fileInput.files[0];
 
-  if (!file) {
-    toast('กรุณาเลือกไฟล์ CSV ก่อนครับ', 'err');
-    return;
-  }
+  if (!file) { toast('กรุณาเลือกไฟล์ CSV ก่อนครับ', 'err'); return; }
 
   Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
+    header: true, skipEmptyLines: true,
     complete: async function(results) {
       const data = results.data;
-      if (!data || data.length === 0) {
-        toast('ไม่พบข้อมูลในไฟล์ หรือไฟล์ผิดรูปแบบ', 'err');
-        return;
-      }
+      if (!data || data.length === 0) { toast('ไม่พบข้อมูลในไฟล์', 'err'); return; }
 
-      if (!confirm(`พบข้อมูล ${data.length} เรื่อง\nระบบจะ "อัปเดตเรื่องเดิม" และ "เพิ่มเรื่องใหม่"\nต้องการดำเนินการต่อหรือไม่?`)) return;
-
+      if (!confirm(`พบข้อมูล ${data.length} เรื่อง\nระบบจะลบเรื่องเก่าทิ้งแล้วแทนที่ด้วยข้อมูลใหม่นี้ (เพื่อให้เวลาและลำดับอัปเดตเป็นล่าสุด)\nต้องการดำเนินการต่อหรือไม่?`)) return;
       toast(`กำลังประมวลผล... โปรดอย่าปิดหน้าเว็บ`, 'ok');
       
-      let addedCount = 0;
-      let updatedCount = 0;
-
-      // 1. สร้าง Map ทะเบียนชื่อหนังที่มีอยู่แล้ว เพื่อให้ค้นหาได้เร็ว (แปลงเป็นตัวพิมพ์เล็กหมดเพื่อกันพลาด)
+      let addedCount = 0; let replacedCount = 0;
       const existingMoviesMap = {};
-      movies.forEach(m => {
-        if (m.title) existingMoviesMap[m.title.toLowerCase()] = m.id;
-      });
+      movies.forEach(m => { if (m.title) existingMoviesMap[m.title.toLowerCase()] = m.id; });
 
-      // 2. เตรียมระบบ Firebase Batch (ส่งทีละ 500 รายการ)
       let batch = db.batch();
       let operationCount = 0;
 
@@ -226,65 +188,135 @@ function handleCSVUpload() {
             platforms: (row.Platforms || row.platforms || row['แพลตฟอร์ม'] || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
             dubs: (row.Audio || row.audio || row['เสียง'] || '').split(',').map(s => s.trim()).filter(Boolean)
           };
-
           const searchTitle = title.toLowerCase();
 
-          // 3. เช็คว่ามีหนังชื่อนี้ในระบบหรือยัง
           if (existingMoviesMap[searchTitle]) {
-            // กรณี: "มีอยู่แล้ว" -> อัปเดตข้อมูลเดิม
-            const docRef = db.collection('movies').doc(existingMoviesMap[searchTitle]);
-            movieData.updatedAt = firebase.firestore.FieldValue.serverTimestamp(); // เก็บเวลาที่อัปเดต
-            batch.update(docRef, movieData);
-            updatedCount++;
-          } else {
-            // กรณี: "ยังไม่มี" -> เพิ่มเป็นเรื่องใหม่
-            const docRef = db.collection('movies').doc(); // ให้ Firebase สร้าง ID ให้
+            // ลบเรื่องเก่าออก
+            const oldDocRef = db.collection('movies').doc(existingMoviesMap[searchTitle]);
+            batch.delete(oldDocRef);
+            operationCount++;
+
+            // เพิ่มข้อมูลใหม่เข้าไป (ทำให้ได้ ID ใหม่ และ timestamp ใหม่)
+            const newDocRef = db.collection('movies').doc();
             movieData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-            batch.set(docRef, movieData);
+            batch.set(newDocRef, movieData);
+            operationCount++;
+            replacedCount++;
+          } else {
+            // เพิ่มเรื่องใหม่
+            const newDocRef = db.collection('movies').doc(); 
+            movieData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            batch.set(newDocRef, movieData);
+            operationCount++;
             addedCount++;
           }
 
-          operationCount++;
-
-          // Firebase Batch จำกัดการส่งสูงสุด 500 รายการต่อรอบ
-          if (operationCount >= 490) {
-            await batch.commit(); // สั่งบันทึก 490 รายการที่สะสมไว้
-            batch = db.batch();   // ล้างกระเป๋า เตรียมสะสมรอบใหม่
+          if (operationCount >= 450) { // Limit < 500
+            await batch.commit();
+            batch = db.batch();
             operationCount = 0;
           }
         }
 
-        // 4. บันทึกข้อมูลที่ยังค้างอยู่ในรอบสุดท้าย (ถ้ามี)
-        if (operationCount > 0) {
-          await batch.commit();
-        }
+        if (operationCount > 0) await batch.commit();
 
-        alert(`🎉 อัปเดตฐานข้อมูลสำเร็จ!\n\nเพิ่มเรื่องใหม่: ${addedCount} เรื่อง\nอัปเดตเรื่องเดิม: ${updatedCount} เรื่อง`);
-        fileInput.value = ''; // เคลียร์ช่องเลือกไฟล์
-        window.location.reload(); // รีเฟรชดูผลลัพธ์
+        alert(`🎉 ประมวลผลสำเร็จ!\n\nเพิ่มเรื่องใหม่: ${addedCount} เรื่อง\nแทนที่เรื่องเก่า: ${replacedCount} เรื่อง`);
+        fileInput.value = ''; 
+        window.location.reload(); 
         
       } catch (err) {
-        console.error("Batch Upload Error:", err);
-        alert("เกิดข้อผิดพลาดระหว่างอัปโหลด โปรดตรวจสอบ Console");
+        console.error("Upload Error:", err);
+        alert("เกิดข้อผิดพลาดระหว่างอัปโหลด");
       }
-    },
-    error: function(err) {
-      toast('เกิดข้อผิดพลาดในการอ่านไฟล์', 'err');
-      console.error(err);
     }
   });
 }
 
 /* ══════════════════════════════════════════
-   ADD / EDIT / DELETE MOVIE (ผ่านฟอร์มเว็บ)
+   BULK DELETE FUNCTIONALITY (ระบบลบทีละมากๆ)
+══════════════════════════════════════════ */
+function toggleSelect(id, isChecked) {
+  if (isChecked) selectedMovies.add(id);
+  else selectedMovies.delete(id);
+  updateBulkActionBar();
+}
+
+function selectAllVisible() {
+  const checkboxes = document.querySelectorAll('.card-checkbox');
+  checkboxes.forEach(cb => {
+    if (!cb.checked) {
+      cb.checked = true;
+      selectedMovies.add(cb.value);
+    }
+  });
+  updateBulkActionBar();
+}
+
+function clearSelection() {
+  selectedMovies.clear();
+  updateBulkActionBar();
+  document.querySelectorAll('.card-checkbox').forEach(cb => cb.checked = false);
+}
+
+function updateBulkActionBar() {
+  const bar = document.getElementById('bulkActionBar');
+  const countLabel = document.getElementById('bulkCount');
+  if (!bar || !countLabel) return;
+  
+  if (selectedMovies.size > 0) {
+    countLabel.textContent = selectedMovies.size;
+    bar.classList.add('show');
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+async function bulkDeleteSelected() {
+  if (selectedMovies.size === 0) return;
+  if (!confirm(`คุณต้องการลบหนังที่เลือกจำนวน ${selectedMovies.size} เรื่อง ใช่หรือไม่?\n(การกระทำนี้ไม่สามารถกู้คืนได้)`)) return;
+
+  toast(`กำลังลบข้อมูล ${selectedMovies.size} เรื่อง...`, 'ok');
+  
+  try {
+    let batch = db.batch();
+    let opCount = 0;
+    
+    for (const id of selectedMovies) {
+      batch.delete(db.collection('movies').doc(id));
+      opCount++;
+      
+      if (opCount >= 480) {
+        await batch.commit();
+        batch = db.batch();
+        opCount = 0;
+      }
+    }
+    if (opCount > 0) await batch.commit();
+    
+    // เอาออกจากอาร์เรย์บนหน้าเว็บทันที ไม่ต้องรีโหลด
+    movies = movies.filter(m => !selectedMovies.has(m.id));
+    selectedMovies.clear();
+    updateBulkActionBar();
+    render();
+    
+    toast('ลบข้อมูลสำเร็จ ✓', 'ok');
+    document.getElementById('countNum').textContent = getFilteredAndSorted().length;
+  } catch(e) {
+    console.error("Bulk Delete Error: ", e);
+    toast('เกิดข้อผิดพลาดในการลบข้อมูล', 'err');
+  }
+}
+
+
+/* ══════════════════════════════════════════
+   ADD / EDIT / DELETE MOVIE (รายบุคคล)
 ══════════════════════════════════════════ */
 async function addMovie() {
-  if (!isAdmin) { toast('กรุณา Login ก่อน', 'err'); return; }
+  if (!isAdmin) return;
   const title = document.getElementById('f_title').value.trim();
   if (!title) { toast('กรุณาใส่ชื่อเรื่อง', 'err'); return; }
   const platforms = [...document.querySelectorAll('#platCBs input:checked')].map(c => c.value);
-  if (!platforms.length) { toast('เลือกอย่างน้อย 1 platform', 'err'); return; }
-
+  
   const data = {
     title, title_th: document.getElementById('f_title_th').value.trim(),
     poster: document.getElementById('f_poster').value.trim(),
@@ -298,8 +330,7 @@ async function addMovie() {
   try {
     const ref = await db.collection('movies').add(data);
     movies.unshift({ id: ref.id, ...data });
-    ['f_title','f_title_th','f_poster','f_year','f_country'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-    document.getElementById('f_genre').value = '';
+    ['f_title','f_title_th','f_poster','f_year','f_country','f_genre'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     ['platCBs','dubCBs'].forEach(id => document.querySelectorAll(`#${id} input`).forEach(cb => { cb.checked=false; cb.closest('.plat-cb').classList.remove('checked'); }));
     document.getElementById('addDetails').removeAttribute('open');
     render(); toast('เพิ่มหนังสำเร็จ ✓', 'ok');
@@ -310,38 +341,32 @@ function openEditModal(id) {
   if (!isAdmin) return;
   const m = movies.find(x => x.id === id);
   if (!m) return;
-  document.getElementById('e_id').value      = id;
-  document.getElementById('e_title').value   = m.title;
-  document.getElementById('e_title_th').value= m.title_th  || '';
-  document.getElementById('e_poster').value  = m.poster    || '';
-  document.getElementById('e_year').value    = m.year      || '';
-  document.getElementById('e_genre').value   = m.genre     || '';
-  document.getElementById('e_country').value = m.country   || '';
-  document.querySelectorAll('#editPlatCBs input').forEach(cb => {
-    cb.checked = (m.platforms||[]).includes(cb.value);
-    cb.closest('.plat-cb').classList.toggle('checked', cb.checked);
-  });
-  document.querySelectorAll('#editDubCBs input').forEach(cb => {
-    cb.checked = (m.dubs||[]).includes(cb.value);
-    cb.closest('.plat-cb').classList.toggle('checked', cb.checked);
-  });
+  document.getElementById('e_id').value = id;
+  document.getElementById('e_title').value = m.title;
+  document.getElementById('e_title_th').value = m.title_th || '';
+  document.getElementById('e_poster').value = m.poster || '';
+  document.getElementById('e_year').value = m.year || '';
+  document.getElementById('e_genre').value = m.genre || '';
+  document.getElementById('e_country').value = m.country || '';
+  document.querySelectorAll('#editPlatCBs input').forEach(cb => { cb.checked = (m.platforms||[]).includes(cb.value); cb.closest('.plat-cb').classList.toggle('checked', cb.checked); });
+  document.querySelectorAll('#editDubCBs input').forEach(cb => { cb.checked = (m.dubs||[]).includes(cb.value); cb.closest('.plat-cb').classList.toggle('checked', cb.checked); });
   document.getElementById('editOverlay').classList.add('open');
 }
 function closeEditModal() { document.getElementById('editOverlay')?.classList.remove('open'); }
 
 async function saveEdit() {
   if (!isAdmin) return;
-  const id    = document.getElementById('e_id').value;
+  const id = document.getElementById('e_id').value;
   const title = document.getElementById('e_title').value.trim();
   if (!title) { toast('ใส่ชื่อเรื่อง', 'err'); return; }
   const data = {
     title, title_th: document.getElementById('e_title_th').value.trim(),
-    poster:  document.getElementById('e_poster').value.trim(),
-    year:    parseInt(document.getElementById('e_year').value) || null,
-    genre:   document.getElementById('e_genre').value,
+    poster: document.getElementById('e_poster').value.trim(),
+    year: parseInt(document.getElementById('e_year').value) || null,
+    genre: document.getElementById('e_genre').value,
     country: document.getElementById('e_country').value.trim(),
     platforms: [...document.querySelectorAll('#editPlatCBs input:checked')].map(c=>c.value),
-    dubs:      [...document.querySelectorAll('#editDubCBs  input:checked')].map(c=>c.value),
+    dubs: [...document.querySelectorAll('#editDubCBs input:checked')].map(c=>c.value),
   };
   try {
     await db.collection('movies').doc(id).update(data);
@@ -357,57 +382,11 @@ async function deleteMovie(id) {
     await db.collection('movies').doc(id).delete();
     movies = movies.filter(m => m.id !== id);
     render(); toast('ลบแล้ว', 'ok');
-  } catch(e) { toast('ลบไม่สำเร็จ', 'err'); }
-}
-
-/* ══════════════════════════════════════════
-   ADS
-══════════════════════════════════════════ */
-async function addAd() {
-  if (!isAdmin) return;
-  const img  = document.getElementById('ad_img').value.trim();
-  const link = document.getElementById('ad_link').value.trim();
-  const side = document.getElementById('ad_side').value;
-  if (!img) { toast('ใส่ URL รูปภาพ', 'err'); return; }
-  try {
-    const data = { side, img, link: link||'', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
-    const ref  = await db.collection('ads').add(data);
-    ads.push({ id: ref.id, ...data });
-    document.getElementById('ad_img').value  = '';
-    document.getElementById('ad_link').value = '';
-    renderAds(); toast('เพิ่มโฆษณาสำเร็จ', 'ok');
-  } catch(e) { toast('ผิดพลาด', 'err'); }
-}
-
-async function deleteAd(id) {
-  if (!isAdmin || !confirm('ลบโฆษณานี้?')) return;
-  try {
-    await db.collection('ads').doc(id).delete();
-    ads = ads.filter(a => a.id !== id);
-    renderAds(); toast('ลบแล้ว', 'ok');
   } catch(e) {}
 }
 
-function renderAds() {
-  const draw = side => {
-    const list = ads.filter(a => a.side === side);
-    if (!list.length) return isAdmin ? `<div class="ad-item">พื้นที่โฆษณา ${side}</div>` : '';
-    return list.map(a => `
-      <div class="ad-item">
-        ${a.link ? `<a href="${a.link}" target="_blank">` : ''}
-        <img src="${a.img}" onerror="this.style.opacity='.2'">
-        ${a.link ? '</a>' : ''}
-        ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
-      </div>`).join('');
-  };
-  const l = document.getElementById('sidebarLeft'); if(l) l.innerHTML = draw('left');
-  const r = document.getElementById('sidebarRight'); if(r) r.innerHTML = draw('right');
-  const m = document.getElementById('mobileAds');
-  if(m) m.innerHTML = ads.length ? ads.map(a=>`<div class="ad-item">${a.link?`<a href="${a.link}" target="_blank">`:''}<img src="${a.img}">${a.link?'</a>':''}${isAdmin?`<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>`:''}</div>`).join('') : '';
-}
-
 /* ══════════════════════════════════════════
-   RENDER MOVIES (ระบบ Infinite Scroll)
+   RENDER MOVIES
 ══════════════════════════════════════════ */
 const PLAT_LABEL = { netflix:'Netflix', disney:'Disney+', hbo:'HBO Max', prime:'Prime Video', apple:'Apple TV+', hulu:'Hulu', youtube:'YouTube', other:'อื่นๆ' };
 
@@ -434,7 +413,6 @@ function render(isAppend = false) {
   if (!isAppend) {
     currentPage = 1;
     currentFiltered = getFilteredAndSorted();
-    
     const countEl = document.getElementById('countNum');
     if(countEl) countEl.textContent = currentFiltered.length;
   }
@@ -458,8 +436,13 @@ function render(isAppend = false) {
     const plats = (m.platforms||[]).map(p => `<span class="ptag ${p}"><span class="ptag-dot"></span>${PLAT_LABEL[p]||p}</span>`).join('');
     const dubs = (m.dubs||[]).map(d => `<span class="dub-tag">${d}</span>`).join('');
     const meta = [m.year, m.genre, m.country].filter(Boolean).join(' · ');
+    
+    // Checkbox สำหรับ Admin
+    const adminCheckbox = isAdmin ? `<input type="checkbox" class="card-checkbox" value="${m.id}" onchange="toggleSelect('${m.id}', this.checked)" ${selectedMovies.has(m.id) ? 'checked' : ''}>` : '';
+
     return `
     <div class="card" style="animation-delay:${dl}s">
+      ${adminCheckbox}
       <div class="card-poster">${pos}</div>
       <div class="card-body">
         <div class="c-title">${m.title||''}</div>
@@ -476,7 +459,7 @@ function render(isAppend = false) {
 }
 
 /* ══════════════════════════════════════════
-   FILTER & SEARCH CONTROLS
+   FILTER, SORT & AC SCROLL LOGIC 
 ══════════════════════════════════════════ */
 document.getElementById('platformFilters')?.addEventListener('click', e => {
   const btn = e.target.closest('.pill');
@@ -508,8 +491,7 @@ function buildAC(q, el) {
     searchQ = item.dataset.title;
     if(document.getElementById('heroSearchInput')) document.getElementById('heroSearchInput').value = searchQ;
     if(document.getElementById('headerSearchInput')) document.getElementById('headerSearchInput').value = searchQ;
-    el.style.display = 'none'; enterBrowse(); 
-    render(); 
+    el.style.display = 'none'; enterBrowse(); render(); 
   }));
 }
 
@@ -530,33 +512,25 @@ function enterBrowse() {
 }
 
 let lastScrollY = window.scrollY;
-
 window.addEventListener('scroll', () => {
   const currentScrollY = window.scrollY;
-
   const isNearBottom = (window.innerHeight + currentScrollY) >= document.body.offsetHeight - 500;
+  
   if (isNearBottom && (currentPage * itemsPerPage < currentFiltered.length)) {
-    currentPage++; 
-    render(true); 
+    currentPage++; render(true); 
   }
-
   if (currentScrollY > 80 && !isBrowse) enterBrowse();
   if (isBrowse) {
     const header = document.getElementById('mainHeader');
     if(header) {
-      if (currentScrollY > lastScrollY && currentScrollY > 150) {
-        header.classList.remove('visible'); 
-      } else {
-        header.classList.add('visible'); 
-      }
+      if (currentScrollY > lastScrollY && currentScrollY > 150) header.classList.remove('visible'); 
+      else header.classList.add('visible'); 
     }
   }
-  
   lastScrollY = currentScrollY;
 }, { passive: true });
 
 function toggleMobFilter() { document.getElementById('platformFilters')?.classList.toggle('mob-hidden'); }
 ['platCBs','dubCBs','editPlatCBs','editDubCBs'].forEach(id => { const el=document.getElementById(id); if(el) el.querySelectorAll('.plat-cb').forEach(l=>{const c=l.querySelector('input'); c.addEventListener('change',()=>l.classList.toggle('checked',c.checked))})});
 
-// เริ่มทำงานเมื่อไฟล์โหลดเสร็จ
 loadData();
