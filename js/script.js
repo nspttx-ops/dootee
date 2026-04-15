@@ -163,7 +163,7 @@ function handleCSVUpload() {
       const data = results.data;
       if (!data || data.length === 0) { toast('ไม่พบข้อมูลในไฟล์', 'err'); return; }
 
-      if (!confirm(`พบข้อมูล ${data.length} เรื่อง\nระบบจะลบเรื่องเก่าทิ้งแล้วแทนที่ด้วยข้อมูลใหม่นี้ (เพื่อให้เวลาและลำดับอัปเดตเป็นล่าสุด)\nต้องการดำเนินการต่อหรือไม่?`)) return;
+      if (!confirm(`พบข้อมูล ${data.length} เรื่อง\nระบบจะลบเรื่องเก่าทิ้งแล้วแทนที่ด้วยข้อมูลใหม่นี้\nต้องการดำเนินการต่อหรือไม่?`)) return;
       toast(`กำลังประมวลผล... โปรดอย่าปิดหน้าเว็บ`, 'ok');
       
       let addedCount = 0; let replacedCount = 0;
@@ -178,7 +178,6 @@ function handleCSVUpload() {
           const title = (row.Title || row.title || row['ชื่อเรื่อง'] || '').trim();
           if (!title) continue;
 
-          // 👉 ดึงข้อมูลเสียงพากย์จากคอลัมน์ Dubs, Audio, เสียงพากย์, เสียง
           const parsedDubs = (row.Dubs || row.dubs || row.Audio || row.audio || row['เสียงพากย์'] || row['เสียง'] || '')
             .split(',')
             .map(s => s.trim())
@@ -388,19 +387,30 @@ async function deleteMovie(id) {
 }
 
 /* ══════════════════════════════════════════
-   ADS
+   ADS SYSTEM (รองรับจำกัด 5 รูป และแยก PC/Mobile)
 ══════════════════════════════════════════ */
 async function addAd() {
   if (!isAdmin) return;
-  const img  = document.getElementById('ad_img').value.trim();
+  const img_sq  = document.getElementById('ad_img_sq').value.trim();
+  const img_banner = document.getElementById('ad_img_banner').value.trim();
   const link = document.getElementById('ad_link').value.trim();
   const side = document.getElementById('ad_side').value;
-  if (!img) { toast('ใส่ URL รูปภาพ', 'err'); return; }
+
+  if (!img_sq && !img_banner) { toast('กรุณาใส่ลิงก์รูปภาพอย่างน้อย 1 แบบ', 'err'); return; }
+
+  // เช็คข้อจำกัด 5 รูปต่อฝั่ง (สำหรับ PC)
+  const currentSideAds = ads.filter(a => a.side === side);
+  if (currentSideAds.length >= 5) {
+    alert(`โฆษณาด้าน${side === 'left' ? 'ซ้าย' : 'ขวา'} เต็มจำนวน 5 รูปแล้ว กรุณาลบของเดิมออกก่อน`);
+    return;
+  }
+
   try {
-    const data = { side, img, link: link||'', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+    const data = { side, img_sq, img_banner, link: link||'', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
     const ref  = await db.collection('ads').add(data);
     ads.push({ id: ref.id, ...data });
-    document.getElementById('ad_img').value  = '';
+    document.getElementById('ad_img_sq').value  = '';
+    document.getElementById('ad_img_banner').value = '';
     document.getElementById('ad_link').value = '';
     renderAds(); toast('เพิ่มโฆษณาสำเร็จ', 'ok');
   } catch(e) { toast('ผิดพลาด', 'err'); }
@@ -416,21 +426,47 @@ async function deleteAd(id) {
 }
 
 function renderAds() {
-  const draw = side => {
-    const list = ads.filter(a => a.side === side);
-    if (!list.length) return isAdmin ? `<div class="ad-item">พื้นที่โฆษณา ${side}</div>` : '';
-    return list.map(a => `
-      <div class="ad-item">
+  // 1. เรนเดอร์โฆษณา PC (แสดงเฉพาะรูปจัตุรัส img_sq) จำกัดฝั่งละไม่เกิน 5 รูป
+  const drawPC = side => {
+    const list = ads.filter(a => a.side === side).slice(0, 5);
+    if (!list.length) return isAdmin ? `<div class="ad-item ad-sq"><div style="color:var(--muted);font-size:0.8rem;padding:20px;text-align:center;">พื้นที่โฆษณา ${side}<br>(PC - จัตุรัส 1:1)</div></div>` : '';
+    
+    return list.map(a => {
+      const imgUrl = a.img_sq || a.img; // ใช้ a.img เผื่อรองรับข้อมูลเดิม
+      if (!imgUrl) return '';
+      return `
+      <div class="ad-item ad-sq">
         ${a.link ? `<a href="${a.link}" target="_blank">` : ''}
-        <img src="${a.img}" onerror="this.style.opacity='.2'">
+        <img src="${imgUrl}" onerror="this.style.opacity='.2'">
         ${a.link ? '</a>' : ''}
         ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
-      </div>`).join('');
+      </div>`;
+    }).join('');
   };
-  const l = document.getElementById('sidebarLeft'); if(l) l.innerHTML = draw('left');
-  const r = document.getElementById('sidebarRight'); if(r) r.innerHTML = draw('right');
+
+  const l = document.getElementById('sidebarLeft'); if(l) l.innerHTML = drawPC('left');
+  const r = document.getElementById('sidebarRight'); if(r) r.innerHTML = drawPC('right');
+
+  // 2. เรนเดอร์โฆษณามือถือ (แสดงเฉพาะรูปแบนเนอร์ img_banner)
   const m = document.getElementById('mobileAds');
-  if(m) m.innerHTML = ads.length ? ads.map(a=>`<div class="ad-item">${a.link?`<a href="${a.link}" target="_blank">`:''}<img src="${a.img}">${a.link?'</a>':''}${isAdmin?`<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>`:''}</div>`).join('') : '';
+  if(m) {
+    const mobileList = ads.filter(a => a.img_banner || a.img); // ดึงโฆษณาทั้งหมดที่มีรูปแบนเนอร์
+    if (!mobileList.length) {
+        m.innerHTML = isAdmin ? `<div class="ad-item ad-banner"><div style="color:var(--muted);font-size:0.8rem;padding:20px;text-align:center;">พื้นที่โฆษณา (มือถือ - แบนเนอร์)</div></div>` : '';
+    } else {
+        m.innerHTML = mobileList.map(a => {
+          const imgUrl = a.img_banner || a.img; // ใช้ a.img เผื่อรองรับข้อมูลเดิม
+          if (!imgUrl) return '';
+          return `
+          <div class="ad-item ad-banner">
+            ${a.link ? `<a href="${a.link}" target="_blank">` : ''}
+            <img src="${imgUrl}" onerror="this.style.opacity='.2'">
+            ${a.link ? '</a>' : ''}
+            ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
+          </div>`;
+        }).join('');
+    }
+  }
 }
 
 /* ══════════════════════════════════════════
