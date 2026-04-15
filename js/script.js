@@ -173,7 +173,7 @@ function showSkeletons()  { const grid = document.getElementById('movieGrid'); i
 function showEmpty(msg)   { const grid = document.getElementById('movieGrid'); if(grid) grid.innerHTML = `<div class="empty"><p>⚠️ ${msg}</p></div>`; }
 
 /* ══════════════════════════════════════════
-   BULK UPLOAD: อัปโหลด CSV จากเครื่องคอมพิวเตอร์
+   BULK UPLOAD: อัปโหลดและอัปเดตข้อมูล (รองรับ Batch ป้องกันเว็บค้าง)
 ══════════════════════════════════════════ */
 function handleCSVUpload() {
   const fileInput = document.getElementById('csvUploadInput');
@@ -184,7 +184,6 @@ function handleCSVUpload() {
     return;
   }
 
-  // ใช้ PapaParse อ่านไฟล์ที่ผู้ใช้เลือก
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
@@ -195,45 +194,79 @@ function handleCSVUpload() {
         return;
       }
 
-      if (!confirm(`พบข้อมูลหนัง ${data.length} เรื่องในไฟล์\nต้องการอัปโหลดขึ้น Database หรือไม่?`)) return;
+      if (!confirm(`พบข้อมูล ${data.length} เรื่อง\nระบบจะ "อัปเดตเรื่องเดิม" และ "เพิ่มเรื่องใหม่"\nต้องการดำเนินการต่อหรือไม่?`)) return;
 
-      toast(`กำลังอัปโหลด ${data.length} เรื่อง... โปรดรอสักครู่`, 'ok');
+      toast(`กำลังประมวลผล... โปรดอย่าปิดหน้าเว็บ`, 'ok');
       
-      let successCount = 0;
-      let errorCount = 0;
+      let addedCount = 0;
+      let updatedCount = 0;
 
-      // แปลงและส่งข้อมูลขึ้น Firestore
-      for (const row of data) {
-        // ตรวจสอบว่ามีชื่อเรื่องหรือไม่ (ป้องกันแถวว่าง)
-        const title = (row.Title || row.title || row['ชื่อเรื่อง'] || '').trim();
-        if (!title) continue;
+      // 1. สร้าง Map ทะเบียนชื่อหนังที่มีอยู่แล้ว เพื่อให้ค้นหาได้เร็ว (แปลงเป็นตัวพิมพ์เล็กหมดเพื่อกันพลาด)
+      const existingMoviesMap = {};
+      movies.forEach(m => {
+        if (m.title) existingMoviesMap[m.title.toLowerCase()] = m.id;
+      });
 
-        const movieData = {
-          title: title,
-          title_th: (row.Title_TH || row.title_th || row['ชื่อไทย'] || '').trim(),
-          poster: (row.Poster || row.poster || '').trim(),
-          year: parseInt(row.Year || row.year || row['ปี'] || '') || null,
-          genre: (row.Genre || row.genre || row['ประเภท'] || '').trim(),
-          country: (row.Country || row.country || row['ประเทศ'] || '').trim(),
-          platforms: (row.Platforms || row.platforms || row['แพลตฟอร์ม'] || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-          dubs: (row.Audio || row.audio || row['เสียง'] || '').split(',').map(s => s.trim()).filter(Boolean),
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
+      // 2. เตรียมระบบ Firebase Batch (ส่งทีละ 500 รายการ)
+      let batch = db.batch();
+      let operationCount = 0;
 
-        try {
-          await db.collection('movies').add(movieData);
-          successCount++;
-        } catch (e) {
-          console.error("Upload error on:", title, e);
-          errorCount++;
+      try {
+        for (const row of data) {
+          const title = (row.Title || row.title || row['ชื่อเรื่อง'] || '').trim();
+          if (!title) continue;
+
+          const movieData = {
+            title: title,
+            title_th: (row.Title_TH || row.title_th || row['ชื่อไทย'] || '').trim(),
+            poster: (row.Poster || row.poster || '').trim(),
+            year: parseInt(row.Year || row.year || row['ปี'] || '') || null,
+            genre: (row.Genre || row.genre || row['ประเภท'] || '').trim(),
+            country: (row.Country || row.country || row['ประเทศ'] || '').trim(),
+            platforms: (row.Platforms || row.platforms || row['แพลตฟอร์ม'] || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+            dubs: (row.Audio || row.audio || row['เสียง'] || '').split(',').map(s => s.trim()).filter(Boolean)
+          };
+
+          const searchTitle = title.toLowerCase();
+
+          // 3. เช็คว่ามีหนังชื่อนี้ในระบบหรือยัง
+          if (existingMoviesMap[searchTitle]) {
+            // กรณี: "มีอยู่แล้ว" -> อัปเดตข้อมูลเดิม
+            const docRef = db.collection('movies').doc(existingMoviesMap[searchTitle]);
+            movieData.updatedAt = firebase.firestore.FieldValue.serverTimestamp(); // เก็บเวลาที่อัปเดต
+            batch.update(docRef, movieData);
+            updatedCount++;
+          } else {
+            // กรณี: "ยังไม่มี" -> เพิ่มเป็นเรื่องใหม่
+            const docRef = db.collection('movies').doc(); // ให้ Firebase สร้าง ID ให้
+            movieData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            batch.set(docRef, movieData);
+            addedCount++;
+          }
+
+          operationCount++;
+
+          // Firebase Batch จำกัดการส่งสูงสุด 500 รายการต่อรอบ
+          if (operationCount >= 490) {
+            await batch.commit(); // สั่งบันทึก 490 รายการที่สะสมไว้
+            batch = db.batch();   // ล้างกระเป๋า เตรียมสะสมรอบใหม่
+            operationCount = 0;
+          }
         }
-      }
 
-      alert(`🎉 อัปโหลดเสร็จสิ้น!\n\nสำเร็จ: ${successCount} เรื่อง\nผิดพลาด: ${errorCount} เรื่อง`);
-      fileInput.value = ''; // เคลียร์ช่องเลือกไฟล์
-      
-      // รีเฟรชหน้าเว็บใหม่เพื่อดึงข้อมูลอัปเดตล่าสุด
-      window.location.reload(); 
+        // 4. บันทึกข้อมูลที่ยังค้างอยู่ในรอบสุดท้าย (ถ้ามี)
+        if (operationCount > 0) {
+          await batch.commit();
+        }
+
+        alert(`🎉 อัปเดตฐานข้อมูลสำเร็จ!\n\nเพิ่มเรื่องใหม่: ${addedCount} เรื่อง\nอัปเดตเรื่องเดิม: ${updatedCount} เรื่อง`);
+        fileInput.value = ''; // เคลียร์ช่องเลือกไฟล์
+        window.location.reload(); // รีเฟรชดูผลลัพธ์
+        
+      } catch (err) {
+        console.error("Batch Upload Error:", err);
+        alert("เกิดข้อผิดพลาดระหว่างอัปโหลด โปรดตรวจสอบ Console");
+      }
     },
     error: function(err) {
       toast('เกิดข้อผิดพลาดในการอ่านไฟล์', 'err');
