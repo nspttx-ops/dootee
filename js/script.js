@@ -235,7 +235,7 @@ function handleCSVUpload() {
 }
 
 /* ══════════════════════════════════════════
-   BULK DELETE FUNCTIONALITY (ระบบลบทีละมากๆ)
+   BULK DELETE FUNCTIONALITY
 ══════════════════════════════════════════ */
 function toggleSelect(id, isChecked) {
   if (isChecked) selectedMovies.add(id);
@@ -308,9 +308,8 @@ async function bulkDeleteSelected() {
   }
 }
 
-
 /* ══════════════════════════════════════════
-   ADD / EDIT / DELETE MOVIE (รายบุคคล)
+   ADD / EDIT / DELETE MOVIE
 ══════════════════════════════════════════ */
 async function addMovie() {
   if (!isAdmin) return;
@@ -387,7 +386,7 @@ async function deleteMovie(id) {
 }
 
 /* ══════════════════════════════════════════
-   ADS SYSTEM (รองรับจำกัด 5 รูป และแยก PC/Mobile)
+   ADS SYSTEM
 ══════════════════════════════════════════ */
 async function addAd() {
   if (!isAdmin) return;
@@ -398,7 +397,6 @@ async function addAd() {
 
   if (!img_sq && !img_banner) { toast('กรุณาใส่ลิงก์รูปภาพอย่างน้อย 1 แบบ', 'err'); return; }
 
-  // เช็คข้อจำกัด 5 รูปต่อฝั่ง (สำหรับ PC)
   const currentSideAds = ads.filter(a => a.side === side);
   if (currentSideAds.length >= 5) {
     alert(`โฆษณาด้าน${side === 'left' ? 'ซ้าย' : 'ขวา'} เต็มจำนวน 5 รูปแล้ว กรุณาลบของเดิมออกก่อน`);
@@ -426,13 +424,12 @@ async function deleteAd(id) {
 }
 
 function renderAds() {
-  // 1. เรนเดอร์โฆษณา PC (แสดงเฉพาะรูปจัตุรัส img_sq) จำกัดฝั่งละไม่เกิน 5 รูป
   const drawPC = side => {
     const list = ads.filter(a => a.side === side).slice(0, 5);
     if (!list.length) return isAdmin ? `<div class="ad-item ad-sq"><div style="color:var(--muted);font-size:0.8rem;padding:20px;text-align:center;">พื้นที่โฆษณา ${side}<br>(PC - จัตุรัส 1:1)</div></div>` : '';
     
     return list.map(a => {
-      const imgUrl = a.img_sq || a.img; // ใช้ a.img เผื่อรองรับข้อมูลเดิม
+      const imgUrl = a.img_sq || a.img; 
       if (!imgUrl) return '';
       return `
       <div class="ad-item ad-sq">
@@ -447,15 +444,14 @@ function renderAds() {
   const l = document.getElementById('sidebarLeft'); if(l) l.innerHTML = drawPC('left');
   const r = document.getElementById('sidebarRight'); if(r) r.innerHTML = drawPC('right');
 
-  // 2. เรนเดอร์โฆษณามือถือ (แสดงเฉพาะรูปแบนเนอร์ img_banner)
   const m = document.getElementById('mobileAds');
   if(m) {
-    const mobileList = ads.filter(a => a.img_banner || a.img); // ดึงโฆษณาทั้งหมดที่มีรูปแบนเนอร์
+    const mobileList = ads.filter(a => a.img_banner || a.img); 
     if (!mobileList.length) {
         m.innerHTML = isAdmin ? `<div class="ad-item ad-banner"><div style="color:var(--muted);font-size:0.8rem;padding:20px;text-align:center;">พื้นที่โฆษณา (มือถือ - แบนเนอร์)</div></div>` : '';
     } else {
         m.innerHTML = mobileList.map(a => {
-          const imgUrl = a.img_banner || a.img; // ใช้ a.img เผื่อรองรับข้อมูลเดิม
+          const imgUrl = a.img_banner || a.img; 
           if (!imgUrl) return '';
           return `
           <div class="ad-item ad-banner">
@@ -472,7 +468,11 @@ function renderAds() {
 /* ══════════════════════════════════════════
    RENDER MOVIES
 ══════════════════════════════════════════ */
-const PLAT_LABEL = { netflix:'Netflix', disney:'Disney+', hbo:'HBO Max', prime:'Prime Video', apple:'Apple TV+', hulu:'Hulu', youtube:'YouTube', other:'อื่นๆ' };
+// 👇 เพิ่มชื่อ Platform ในระบบให้แสดงผลบนการ์ด 👇
+const PLAT_LABEL = { 
+  netflix:'Netflix', disney:'Disney+', hbo:'HBO Max', prime:'Prime Video', apple:'Apple TV+', hulu:'Hulu', youtube:'YouTube', 
+  viu:'Viu', wetv:'WeTV', iqiyi:'iQIYI', bilibili:'Bilibili', other:'อื่นๆ' 
+};
 
 function getFilteredAndSorted() {
   const q = searchQ.toLowerCase().trim();
@@ -521,7 +521,6 @@ function render(isAppend = false) {
     const dubs = (m.dubs||[]).map(d => `<span class="dub-tag">${d}</span>`).join('');
     const meta = [m.year, m.genre, m.country].filter(Boolean).join(' · ');
     
-    // Checkbox สำหรับ Admin
     const adminCheckbox = isAdmin ? `<input type="checkbox" class="card-checkbox" value="${m.id}" onchange="toggleSelect('${m.id}', this.checked)" ${selectedMovies.has(m.id) ? 'checked' : ''}>` : '';
 
     return `
