@@ -6,6 +6,7 @@
 <title>dootee — ดูอะไร ดูที่ไหน dootee นี่</title>
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+<!-- ✅ Firebase ต้องโหลดก่อน script.js เสมอ -->
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
@@ -15,6 +16,7 @@
 </head>
 <body>
 
+<!-- ══════ STICKY HEADER ══════ -->
 <header id="mainHeader">
   <div class="logo-sm">doo<span>tee</span><small>ดูอะไร ดูที่ไหน</small></div>
   <div id="headerSearch">
@@ -27,6 +29,7 @@
   </div>
 </header>
 
+<!-- ══════ HERO ══════ -->
 <section id="heroSection">
   <div class="hero-logo">doo<span>tee</span></div>
   <div class="hero-tagline">🎬 ดูอะไร ดูที่ไหน dootee นี่</div>
@@ -42,7 +45,8 @@
     <span class="hint-chip" data-platform="disney"><span class="plogo disney">D+</span>Disney+</span>
     <span class="hint-chip" data-platform="hbo"><span class="plogo hbo">HBO</span>Max</span>
     <span class="hint-chip" data-platform="prime"><span class="plogo prime">▶</span>Prime</span>
-    <span class="hint-chip" data-platform="viu"><span class="plogo viu">Viu</span>Viu</span>
+    <span class="hint-chip" data-platform="apple"><span class="plogo apple">TV+</span>Apple</span>
+    <span class="hint-chip" data-platform="viu"><span class="plogo viu">Viu</span></span>
     <span class="hint-chip" data-platform="wetv"><span class="plogo wetv">We</span>WeTV</span>
     <span class="hint-chip" data-platform="iqiyi"><span class="plogo iqiyi">iQ</span>iQIYI</span>
     <span class="hint-chip" data-platform="bilibili"><span class="plogo bilibili">Bi</span>Bilibili</span>
@@ -54,38 +58,50 @@
   </div>
 </section>
 
+<!-- ══════ BROWSE ══════ -->
 <div id="browseSection">
   <div class="browse-layout">
 
     <aside class="sidebar" id="sidebarLeft"></aside>
 
     <main class="browse-main">
+
+      <!-- ADMIN PANEL -->
       <div class="admin-panel" id="adminPanel">
-        <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
-          <span>⚙️ Admin Panel</span>
+        <div class="panel-title">⚙️ Admin Panel</div>
+
+        <!-- Bulk CSV Upload -->
+        <div id="migrateArea" class="migrate-area" style="display:none">
+          <div class="migrate-title">📂 อัปโหลดข้อมูลหนังจำนวนมาก (.CSV)</div>
+          <p class="migrate-desc">เตรียมใน Excel → บันทึกเป็น .csv → อัปโหลดทีละหลายร้อยเรื่อง<br>
+          คอลัมน์: <code>Title, Title_TH, Poster, Year, Genre, Country, Platforms, Dubs</code></p>
+          <input type="file" id="csvUploadInput" accept=".csv" class="csv-file-input">
+          <button class="btn-primary btn-upload" onclick="handleCSVUpload()">🚀 อัปโหลดเข้า Firebase ทันที</button>
         </div>
 
-        <div id="migrateArea" style="display:none; padding: 16px; background: rgba(59, 130, 246, 0.1); border: 1px dashed #3b82f6; margin-bottom: 20px; border-radius: 8px;">
-          <div style="color: #60a5fa; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">📂 อัปโหลดข้อมูลหนังจำนวนมากผ่านไฟล์ CSV</div>
-          <p style="color: var(--muted); font-size: 0.8rem; margin-bottom: 12px;">เตรียมข้อมูลใน Excel เซฟเป็น .csv แล้วอัปโหลด (ระบบจะลบเรื่องเก่าออกและทับด้วยข้อมูลใหม่หากชื่อตรงกัน)</p>
-          <input type="file" id="csvUploadInput" accept=".csv" style="margin-bottom: 10px; width: 100%; padding: 8px; background: var(--surface); border-radius: 6px; color: var(--text);">
-          <button onclick="handleCSVUpload()" style="padding: 10px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
-            🚀 อัปโหลดเข้า Firebase ทันที
-          </button>
-        </div>
+        <!-- Bulk Select -->
+        <button class="btn-select-all" id="btnSelectAll" onclick="selectAllVisible()">☑️ เลือกทั้งหมดบนหน้าจอ (Bulk Delete)</button>
 
-        <button class="btn-select-all" onclick="selectAllVisible()">☑️ เลือกหนังบนหน้าจอทั้งหมด (Bulk Delete)</button>
-
+        <!-- Add Movie Form -->
         <details class="adm-detail" id="addDetails">
-          <summary>➕ เพิ่มหนัง / ซีรีส์ (แบบแมนวล)</summary>
+          <summary>➕ เพิ่มหนัง / ซีรีส์ (แมนวล)</summary>
           <div class="form-body">
             <div class="form-grid">
-              <div class="field" style="grid-column:1/-1"><label>ชื่อเรื่อง (อังกฤษ) *</label><input type="text" id="f_title"></div>
-              <div class="field" style="grid-column:1/-1"><label>รูปโปสเตอร์ (URL)</label><input type="url" id="f_poster"></div>
+              <div class="field" style="grid-column:1/-1"><label>ชื่อเรื่อง (อังกฤษ) *</label><input type="text" id="f_title" placeholder="เช่น Avengers"></div>
+              <div class="field" style="grid-column:1/-1"><label>รูปโปสเตอร์ (URL)</label><input type="url" id="f_poster" placeholder="https://..."></div>
               <div class="field"><label>ชื่อภาษาไทย</label><input type="text" id="f_title_th"></div>
-              <div class="field"><label>ปีที่ออกฉาย</label><input type="number" id="f_year"></div>
-              <div class="field"><label>หมวดหมู่</label><select id="f_genre"><option value="">-- เลือก --</option><option>Action</option><option>Comedy</option><option>Drama</option><option>Horror</option><option>Sci-Fi</option><option>Series</option></select></div>
-              <div class="field"><label>ประเทศ</label><input type="text" id="f_country"></div>
+              <div class="field"><label>ปีที่ออกฉาย</label><input type="number" id="f_year" placeholder="2024"></div>
+              <div class="field">
+                <label>หมวดหมู่</label>
+                <select id="f_genre">
+                  <option value="">-- เลือก --</option>
+                  <option>Action</option><option>Comedy</option><option>Drama</option>
+                  <option>Horror</option><option>Romance</option><option>Sci-Fi</option>
+                  <option>Thriller</option><option>Animation</option><option>Documentary</option>
+                  <option>Fantasy</option><option>Crime</option><option>Series</option>
+                </select>
+              </div>
+              <div class="field"><label>ประเทศ</label><input type="text" id="f_country" placeholder="เช่น TH, US, KR"></div>
             </div>
             <div class="field">
               <label>เสียงพากย์ / ซับไตเติ้ล</label>
@@ -105,11 +121,11 @@
                 <label class="plat-cb"><input type="checkbox" value="disney">Disney+</label>
                 <label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label>
                 <label class="plat-cb"><input type="checkbox" value="prime">Prime Video</label>
+                <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
                 <label class="plat-cb"><input type="checkbox" value="viu">Viu</label>
                 <label class="plat-cb"><input type="checkbox" value="wetv">WeTV</label>
                 <label class="plat-cb"><input type="checkbox" value="iqiyi">iQIYI</label>
                 <label class="plat-cb"><input type="checkbox" value="bilibili">Bilibili</label>
-                <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
                 <label class="plat-cb"><input type="checkbox" value="youtube">YouTube</label>
                 <label class="plat-cb"><input type="checkbox" value="other">อื่นๆ</label>
               </div>
@@ -118,106 +134,142 @@
           </div>
         </details>
 
+        <!-- Ads Form -->
         <details class="adm-detail" id="addAdDetails">
-          <summary>🖼️ จัดการโฆษณา</summary>
+          <summary>🖼️ จัดการโฆษณา Sidebar</summary>
           <div class="form-body">
             <div class="form-grid">
               <div class="field">
-                <label>ตำแหน่ง (สำหรับ PC)</label>
+                <label>ตำแหน่ง (PC)</label>
                 <select id="ad_side"><option value="left">ด้านซ้าย</option><option value="right">ด้านขวา</option></select>
               </div>
+              <div class="field">
+                <label>ลิงก์ปลายทาง</label>
+                <input type="url" id="ad_link" placeholder="https://...">
+              </div>
             </div>
-            <div class="field" style="margin-top:10px">
-              <label>1. รูปแบบจัตุรัส (สำหรับ PC 1:1) *</label>
+            <div class="field" style="margin-top:8px">
+              <label>📐 รูปจัตุรัส 1:1 (สำหรับ PC Sidebar)</label>
               <input type="url" id="ad_img_sq" placeholder="https://...">
             </div>
-            <div class="field" style="margin-top:10px">
-              <label>2. รูปแบบแบนเนอร์ (สำหรับมือถือ แนวนอน) *</label>
+            <div class="field" style="margin-top:8px">
+              <label>📏 รูปแบนเนอร์แนวนอน (สำหรับมือถือ)</label>
               <input type="url" id="ad_img_banner" placeholder="https://...">
             </div>
-            <div class="field" style="margin-top:10px">
-              <label>ลิงก์ปลายทางเมื่อคลิก</label>
-              <input type="url" id="ad_link" placeholder="https://...">
-            </div>
-            <button class="btn-primary" style="margin-top:14px;width:100%;background:#1ce783;color:#000" onclick="addAd()">➕ เพิ่มโฆษณา (จำกัดฝั่งละ 5 รูป)</button>
+            <p style="font-size:.75rem;color:var(--muted);margin-top:6px">จำกัดฝั่งละ 5 รูป</p>
+            <button class="btn-primary" style="margin-top:12px;width:100%;background:#1ce783;color:#000" onclick="addAd()">➕ เพิ่มโฆษณา</button>
           </div>
         </details>
       </div>
+      <!-- END ADMIN PANEL -->
 
+      <!-- CONTROLS -->
       <div class="controls-bar">
-        <button class="mob-filter-btn" onclick="toggleMobFilter()">🔍 ตัวกรอง & แพลตฟอร์ม</button>
+        <button class="mob-filter-btn" onclick="toggleMobFilter()">🔍 กรองตาม Platform ▾</button>
         <div class="filter-scroll mob-hidden" id="platformFilters">
           <button class="pill active" data-platform="all">ทั้งหมด</button>
-          <button class="pill" data-platform="netflix"><span class="plogo netflix">N</span> Netflix</button>
-          <button class="pill" data-platform="disney"><span class="plogo disney">D+</span> Disney+</button>
-          <button class="pill" data-platform="hbo"><span class="plogo hbo">HBO</span> HBO Max</button>
-          <button class="pill" data-platform="prime"><span class="plogo prime">▶</span> Prime</button>
-          <button class="pill" data-platform="viu"><span class="plogo viu">Viu</span> Viu</button>
-          <button class="pill" data-platform="wetv"><span class="plogo wetv">We</span> WeTV</button>
-          <button class="pill" data-platform="iqiyi"><span class="plogo iqiyi">iQ</span> iQIYI</button>
-          <button class="pill" data-platform="bilibili"><span class="plogo bilibili">Bi</span> Bilibili</button>
+          <button class="pill" data-platform="netflix"><span class="plogo netflix">N</span>Netflix</button>
+          <button class="pill" data-platform="disney"><span class="plogo disney">D+</span>Disney+</button>
+          <button class="pill" data-platform="hbo"><span class="plogo hbo">HBO</span>Max</button>
+          <button class="pill" data-platform="prime"><span class="plogo prime">▶</span>Prime</button>
+          <button class="pill" data-platform="apple"><span class="plogo apple">TV+</span>Apple</button>
+          <button class="pill" data-platform="viu"><span class="plogo viu">Viu</span></button>
+          <button class="pill" data-platform="wetv"><span class="plogo wetv">We</span>WeTV</button>
+          <button class="pill" data-platform="iqiyi"><span class="plogo iqiyi">iQ</span>iQIYI</button>
+          <button class="pill" data-platform="bilibili"><span class="plogo bilibili">Bi</span>Bilibili</button>
+          <button class="pill" data-platform="youtube"><span class="plogo youtube">▶</span>YouTube</button>
         </div>
       </div>
 
       <div class="stats-row">
         <div>ข้อมูลในระบบ <strong id="countNum">0</strong> เรื่อง</div>
         <div class="sort-bar">
-          <span class="sort-lbl">เรียงตาม:</span>
+          <span class="sort-lbl">เรียง:</span>
           <button class="sort-btn active" data-sort="default">ล่าสุด</button>
-          <button class="sort-btn" data-sort="title_en">ชื่ออังกฤษ <span></span></button>
-          <button class="sort-btn" data-sort="year">ปี <span></span></button>
+          <button class="sort-btn" data-sort="title_en">ชื่อ A–Z <span>↑</span></button>
+          <button class="sort-btn" data-sort="title_th">ชื่อไทย <span>↑</span></button>
+          <button class="sort-btn" data-sort="year">ปี <span>↓</span></button>
         </div>
       </div>
 
+      <!-- Mobile Ads (แสดงเฉพาะมือถือ) -->
       <div class="mobile-ads" id="mobileAds"></div>
 
       <div class="grid" id="movieGrid">
-        <div class="skel"></div><div class="skel"></div><div class="skel"></div>
+        <div class="skel"></div><div class="skel"></div>
+        <div class="skel"></div><div class="skel"></div>
+        <div class="skel"></div><div class="skel"></div>
+        <div class="skel"></div><div class="skel"></div>
+      </div>
+
+      <div id="infiniteLoader" class="infinite-loader" style="display:none">
+        <div class="loader-dots"><span></span><span></span><span></span></div>
       </div>
     </main>
 
     <aside class="sidebar" id="sidebarRight"></aside>
-
   </div>
 </div>
 
+<!-- FOOTER -->
 <footer>
   <div class="visitor-badge">👁️ ผู้เข้าชม: <strong id="visitorNum">...</strong> คน</div>
-  <div style="margin-top:8px" id="loadStatus">กำลังโหลด...</div>
+  <div id="loadStatus" style="margin-top:6px;font-size:.78rem">กำลังโหลด...</div>
+  <div style="margin-top:10px">สร้างด้วย ❤️ โดย dootee · ขับเคลื่อนด้วย Firebase</div>
 </footer>
 
+<!-- TOAST -->
 <div id="toast" class="toast"></div>
 
+<!-- BULK ACTION BAR (ลอยด้านล่าง) -->
 <div id="bulkActionBar" class="bulk-action-bar">
-  <span>เลือกแล้ว <strong id="bulkCount">0</strong> เรื่อง</span>
-  <button class="btn-cancel" onclick="clearSelection()" style="padding: 8px 16px;">ยกเลิก</button>
-  <button class="btn-del" onclick="bulkDeleteSelected()" style="background:#ef4444;color:white;border:none;padding: 8px 16px;">🗑️ ลบทิ้งทั้งหมด</button>
+  <span style="font-size:.9rem">เลือกแล้ว <strong id="bulkCount">0</strong> เรื่อง</span>
+  <button class="bulk-btn-cancel" onclick="clearSelection()">ยกเลิก</button>
+  <button class="bulk-btn-del" onclick="bulkDeleteSelected()">🗑️ ลบทั้งหมด</button>
 </div>
 
+<!-- LOGIN MODAL -->
 <div class="overlay" id="loginModal">
   <div class="modal" style="max-width:380px">
-    <h3>🔒 เข้าสู่ระบบ (Firebase)</h3>
-    <div class="field" style="margin-bottom:12px"><label>Email</label><input type="text" id="login_email"></div>
-    <div class="field"><label>รหัสผ่าน</label><input type="password" id="login_pass"></div>
-    <div class="modal-actions"><button class="btn-cancel" onclick="closeLoginModal()">ยกเลิก</button><button class="btn-save" onclick="processLogin()">เข้าสู่ระบบ</button></div>
+    <h3>🔒 เข้าสู่ระบบ Admin</h3>
+    <div class="field" style="margin-bottom:12px">
+      <label>Email</label>
+      <input type="email" id="login_email" placeholder="admin@dootee.com">
+    </div>
+    <div class="field" style="margin-bottom:20px">
+      <label>รหัสผ่าน</label>
+      <input type="password" id="login_pass" placeholder="••••••••">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeLoginModal()">ยกเลิก</button>
+      <button class="btn-save" onclick="processLogin()">เข้าสู่ระบบ</button>
+    </div>
   </div>
 </div>
 
+<!-- EDIT MOVIE MODAL -->
 <div class="overlay" id="editOverlay">
   <div class="modal">
     <h3>✏️ แก้ไขข้อมูลหนัง</h3>
     <input type="hidden" id="e_id">
-    <div class="form-body">
+    <div class="form-body" style="padding:0">
       <div class="form-grid">
         <div class="field" style="grid-column:1/-1"><label>ชื่อเรื่อง (อังกฤษ) *</label><input type="text" id="e_title"></div>
         <div class="field" style="grid-column:1/-1"><label>รูปโปสเตอร์ (URL)</label><input type="url" id="e_poster"></div>
         <div class="field"><label>ชื่อภาษาไทย</label><input type="text" id="e_title_th"></div>
         <div class="field"><label>ปีที่ออกฉาย</label><input type="number" id="e_year"></div>
-        <div class="field"><label>หมวดหมู่</label><input type="text" id="e_genre"></div>
+        <div class="field"><label>หมวดหมู่</label>
+          <select id="e_genre">
+            <option value="">-- เลือก --</option>
+            <option>Action</option><option>Comedy</option><option>Drama</option>
+            <option>Horror</option><option>Romance</option><option>Sci-Fi</option>
+            <option>Thriller</option><option>Animation</option><option>Documentary</option>
+            <option>Fantasy</option><option>Crime</option><option>Series</option>
+          </select>
+        </div>
         <div class="field"><label>ประเทศ</label><input type="text" id="e_country"></div>
       </div>
-      
-      <div class="field">
+      <div class="field" style="margin-top:12px">
         <label>เสียงพากย์ / ซับไตเติ้ล</label>
         <div class="cb-group" id="editDubCBs">
           <label class="plat-cb"><input type="checkbox" value="TH">TH</label>
@@ -228,28 +280,53 @@
           <label class="plat-cb"><input type="checkbox" value="ซับไทย">📝 ซับไทย</label>
         </div>
       </div>
-
-      <div class="field" style="margin-top:10px"><label>Platform ที่ดูได้ *</label>
+      <div class="field" style="margin-top:12px">
+        <label>Platform ที่ดูได้ *</label>
         <div class="cb-group" id="editPlatCBs">
           <label class="plat-cb"><input type="checkbox" value="netflix">Netflix</label>
           <label class="plat-cb"><input type="checkbox" value="disney">Disney+</label>
           <label class="plat-cb"><input type="checkbox" value="hbo">HBO Max</label>
           <label class="plat-cb"><input type="checkbox" value="prime">Prime</label>
+          <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
           <label class="plat-cb"><input type="checkbox" value="viu">Viu</label>
           <label class="plat-cb"><input type="checkbox" value="wetv">WeTV</label>
           <label class="plat-cb"><input type="checkbox" value="iqiyi">iQIYI</label>
           <label class="plat-cb"><input type="checkbox" value="bilibili">Bilibili</label>
-          <label class="plat-cb"><input type="checkbox" value="apple">Apple TV+</label>
           <label class="plat-cb"><input type="checkbox" value="youtube">YouTube</label>
           <label class="plat-cb"><input type="checkbox" value="other">อื่นๆ</label>
         </div>
       </div>
     </div>
-    <div class="modal-actions"><button class="btn-cancel" onclick="closeEditModal()">ยกเลิก</button><button class="btn-save" onclick="saveEdit()">บันทึกข้อมูล</button></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeEditModal()">ยกเลิก</button>
+      <button class="btn-save" onclick="saveEdit()">💾 บันทึกข้อมูล</button>
+    </div>
   </div>
 </div>
 
-<script src="js/script.js"></script>
+<!--
+  ╔══════════════════════════════════════════════════════╗
+  ║  FIRESTORE SECURITY RULES (Firebase Console > Firestore > Rules)
+  ║
+  ║  rules_version = '2';
+  ║  service cloud.firestore {
+  ║    match /databases/{database}/documents {
+  ║      match /movies/{doc} {
+  ║        allow read: if true;
+  ║        allow write: if request.auth != null;
+  ║      }
+  ║      match /ads/{doc} {
+  ║        allow read: if true;
+  ║        allow write: if request.auth != null;
+  ║      }
+  ║      match /stats/{doc} {
+  ║        allow read, write: if true;
+  ║      }
+  ║    }
+  ║  }
+  ╚══════════════════════════════════════════════════════╝
+-->
 
+<script src="js/script.js"></script>
 </body>
 </html>
