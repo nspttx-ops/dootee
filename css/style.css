@@ -136,7 +136,7 @@ footer { text-align: center; padding: 28px 20px; border-top: 1px solid var(--bor
 .visitor-badge strong { color: var(--accent); font-size: 1rem; }
 
 /* ========================================================
-   BULK ACTION BAR & CHECKBOXES (ส่วนที่เพิ่มใหม่)
+   BULK ACTION BAR & CHECKBOXES
 ======================================================== */
 .card-checkbox {
   position: absolute; top: 12px; left: 12px; z-index: 10;
@@ -160,3 +160,45 @@ footer { text-align: center; padding: 28px 20px; border-top: 1px solid var(--bor
 }
 .btn-select-all:hover { background: rgba(250,204,21,0.2); }
 .admin-panel.open ~ .btn-select-all, .admin-panel.open .btn-select-all { display: block; }
+
+/* ========================================================
+   ADS SYSTEM (ปรับปรุงใหม่แก้ภาพเพี้ยน)
+======================================================== */
+.ad-item {
+  width: 100%;
+  background: var(--surface);
+  border: 1px dashed rgba(148,163,184,.25);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.ad-item a { display: block; width: 100%; height: 100%; }
+
+/* บังคับสัดส่วนภาพ ป้องกันการยืดหด */
+.ad-sq { aspect-ratio: 1 / 1; }
+.ad-banner { aspect-ratio: 21 / 9; max-height: 120px; }
+
+.ad-item img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; /* ครอบตัดส่วนเกินอัตโนมัติ ไม่บีบรูป */
+  transition: opacity 0.3s;
+}
+.ad-item img:hover { opacity: 0.85; }
+
+.del-ad-btn {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(239,68,68,.9); color: #fff;
+  border: none; border-radius: 5px; padding: 4px 10px;
+  font-size: 0.75rem; cursor: pointer; z-index: 10;
+}
+.mobile-ads { display: none; width: 100%; margin-bottom: 16px; }
+
+@media(max-width: 1100px) { 
+  .mobile-ads { display: block; } 
+  .sidebar { display: none; } /* ซ่อนแถบด้านข้างบนมือถือ */
+}
