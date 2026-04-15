@@ -63,12 +63,16 @@
       <div class="admin-panel" id="adminPanel">
         <div class="panel-title">⚙️ Admin Panel</div>
 
-        <div id="migrateArea" style="display:none; padding: 16px; background: rgba(239, 68, 68, 0.1); border: 1px dashed red; margin-bottom: 20px; border-radius: 8px;">
-          <p style="color: #f87171; font-size: 0.85rem; margin-bottom: 10px;">⚠️ โซนอันตราย: นำเข้าข้อมูลจากไฟล์ data/movies.csv ไปยัง Firebase (ทำแค่ครั้งเดียวเท่านั้นเพื่อป้องกันข้อมูลซ้ำ)</p>
-          <button onclick="migrateCSVtoFirestore()" style="padding: 10px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
-            🚀 อัปโหลดหนังทั้งหมดจาก CSV ขึ้น Firebase
-          </button>
-        </div>
+        <div id="migrateArea" style="display:none; padding: 16px; background: rgba(59, 130, 246, 0.1); border: 1px dashed #3b82f6; margin-bottom: 20px; border-radius: 8px;">
+  <div style="color: #60a5fa; font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">📂 อัปโหลดข้อมูลหนังจำนวนมากผ่านไฟล์ CSV</div>
+  <p style="color: var(--muted); font-size: 0.8rem; margin-bottom: 12px;">เตรียมข้อมูลใน Excel (คอลัมน์: Title, Title_TH, Poster, Year, Genre, Country, Audio, Platforms) เซฟเป็น .csv แล้วอัปโหลดที่นี่</p>
+  
+  <input type="file" id="csvUploadInput" accept=".csv" style="margin-bottom: 10px; width: 100%; padding: 8px; background: var(--surface); border-radius: 6px; color: var(--text);">
+  
+  <button onclick="handleCSVUpload()" style="padding: 10px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+    🚀 อัปโหลดเข้า Firebase ทันที
+  </button>
+</div>
         <details class="adm-detail" id="addDetails">
           <summary>➕ เพิ่มหนัง / ซีรีส์ (ผ่านเว็บ)</summary>
           <div class="form-body">
