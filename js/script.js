@@ -10,10 +10,8 @@ const FB_CFG = {
   appId: "1:1046787113656:web:e42e64be44f70fd5e2ea4d"
 };
 
-// 📍 ชี้ไปที่ไฟล์ CSV ในโฟลเดอร์ data ของคุณ (ตามภาพ)
+// 📍 ชี้ไปที่ไฟล์ CSV ในโฟลเดอร์ data ของคุณ
 const SHEET_CSV = "data/movies.csv"; 
-// หากต้องการกลับไปใช้ลิงก์ Google Sheets แบบออนไลน์ ให้เปลี่ยนเป็นบรรทัดด้านล่างแทน
-// const SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTgaibi2KqJK1BFLASNmdhw1Qqw1ZHIu5PotNXaDgosvAzl7qiC3rMCNzeaK0SrZgXCu6WvgihYhPMf/pub?output=csv";
 
 /* ══════════════════════════════════════════
    FIREBASE INIT
@@ -23,7 +21,7 @@ const db   = firebase.firestore();
 const auth = firebase.auth();
 
 /* ══════════════════════════════════════════
-   STATE
+   STATE (ตัวแปรสถานะระบบ)
 ══════════════════════════════════════════ */
 let isAdmin = false;
 let movies  = [];
@@ -33,7 +31,11 @@ let searchQ  = '';
 let sortKey  = 'default';
 let sortDir  = {};
 let isBrowse = false;
-let acIdx    = -1;
+
+// ตัวแปรสำหรับ Pagination (Infinite Scroll)
+let currentPage = 1;
+const itemsPerPage = 24; // แสดงผลทีละ 24 เรื่อง
+let currentFiltered = []; // เก็บข้อมูลที่ผ่านการกรองแล้ว
 
 /* ══════════════════════════════════════════
    TOAST (แจ้งเตือน)
@@ -64,7 +66,7 @@ function setAdmin(val) {
   const panel = document.getElementById('adminPanel');
   if (panel) panel.classList.toggle('open', val);
   renderAds();
-  render();
+  render(); // โหลดใหม่เมื่อสถานะแอดมินเปลี่ยน (เพื่อให้ปุ่มแก้ไข/ลบโผล่)
 }
 
 document.getElementById('authBtn')?.addEventListener('click', () => {
@@ -174,7 +176,7 @@ function reloadSheets() {
       
       movies = [...movies.filter(m => !m.id.startsWith('sheet_')), ...fromSheets];
       setLoadStatus(`โหลดสำเร็จ ${movies.length} เรื่อง`);
-      render();
+      render(); // วาดหน้าเว็บครั้งแรกเมื่อโหลดเสร็จ
     },
     error: () => { setLoadStatus('❌ โหลดไม่สำเร็จ (ต้องเปิดผ่าน Live Server)'); showEmpty('ไม่สามารถอ่านไฟล์ data/movies.csv ได้ ลองเปิดด้วย Live Server'); }
   });
@@ -185,7 +187,7 @@ function showSkeletons()  { const grid = document.getElementById('movieGrid'); i
 function showEmpty(msg)   { const grid = document.getElementById('movieGrid'); if(grid) grid.innerHTML = `<div class="empty"><p>⚠️ ${msg}</p></div>`; }
 
 /* ══════════════════════════════════════════
-   ADD / EDIT / DELETE MOVIE (ลง Firebase)
+   ADD / EDIT / DELETE MOVIE
 ══════════════════════════════════════════ */
 async function addMovie() {
   if (!isAdmin) { toast('กรุณา Login ก่อน', 'err'); return; }
@@ -316,11 +318,12 @@ function renderAds() {
 }
 
 /* ══════════════════════════════════════════
-   RENDER MOVIES
+   RENDER MOVIES (พร้อมระบบ Infinite Scroll)
 ══════════════════════════════════════════ */
 const PLAT_LABEL = { netflix:'Netflix', disney:'Disney+', hbo:'HBO Max', prime:'Prime Video', apple:'Apple TV+', hulu:'Hulu', youtube:'YouTube', other:'อื่นๆ' };
 
-function render() {
+// แยกฟังก์ชันดึงข้อมูลที่กรองและเรียงลำดับแล้วออกมา
+function getFilteredAndSorted() {
   const q = searchQ.toLowerCase().trim();
   let filtered = movies.filter(m => {
     const ms = !q || m.title.toLowerCase().includes(q) || (m.title_th||'').toLowerCase().includes(q);
@@ -336,17 +339,37 @@ function render() {
         return va < vb ? -d : va > vb ? d : 0;
       });
   }
+  return filtered;
+}
 
-  const countEl = document.getElementById('countNum');
-  if(countEl) countEl.textContent = filtered.length;
-  
+// ฟังก์ชัน Render (รับค่า isAppend เพื่อบอกว่าเป็นการเลื่อนโหลดต่อหรือไม่)
+function render(isAppend = false) {
+  // ถ้าเป็นการค้นหาใหม่ หรือเปลี่ยนฟิลเตอร์ ให้รีเซ็ตหน้าเป็นหน้าแรก
+  if (!isAppend) {
+    currentPage = 1;
+    currentFiltered = getFilteredAndSorted();
+    
+    // อัปเดตจำนวนทั้งหมดที่ค้นเจอ
+    const countEl = document.getElementById('countNum');
+    if(countEl) countEl.textContent = currentFiltered.length;
+  }
+
   const grid = document.getElementById('movieGrid');
   if(!grid) return;
 
-  if (!filtered.length) { grid.innerHTML = `<div class="empty"><p>🔍 ไม่พบเรื่องที่ค้นหา</p></div>`; return; }
+  // กรณีไม่พบข้อมูลเลย
+  if (!currentFiltered.length) { 
+    grid.innerHTML = `<div class="empty"><p>🔍 ไม่พบเรื่องที่ค้นหา</p></div>`; 
+    return; 
+  }
 
-  grid.innerHTML = filtered.map((m, i) => {
-    const dl  = Math.min(i * 0.03, 0.5);
+  // คำนวณขอบเขตข้อมูลที่จะนำมาแสดง
+  const endIndex = currentPage * itemsPerPage;
+  const itemsToRender = currentFiltered.slice(0, endIndex);
+
+  // วาด HTML ของการ์ดหนัง
+  const htmlString = itemsToRender.map((m, i) => {
+    const dl  = Math.min((i % itemsPerPage) * 0.03, 0.5); // รีเซ็ต delay การโหลดของแต่ละหน้า
     const pos = m.poster
       ? `<img src="${m.poster}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-poster\\'>🎬</div>'">`
       : `<div class="no-poster">🎬</div>`;
@@ -366,6 +389,8 @@ function render() {
       </div>
     </div>`;
   }).join('');
+
+  grid.innerHTML = htmlString;
 }
 
 /* ══════════════════════════════════════════
@@ -375,7 +400,8 @@ document.getElementById('platformFilters')?.addEventListener('click', e => {
   const btn = e.target.closest('.pill');
   if (!btn) return;
   document.querySelectorAll('#platformFilters .pill').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active'); filterPlatform = btn.dataset.platform; render();
+  btn.classList.add('active'); filterPlatform = btn.dataset.platform; 
+  render(); // ค้นหาใหม่ -> วาดหน้า 1
 });
 
 document.querySelectorAll('.sort-btn').forEach(btn => {
@@ -385,7 +411,8 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
     else if (sortKey === key) sortDir[key] = (sortDir[key] ?? 1) * -1;
     else { sortKey = key; if (!sortDir[key]) sortDir[key] = 1; }
     document.querySelectorAll('.sort-btn').forEach(b => { b.classList.remove('active'); const ar = b.querySelector('span'); if(ar) ar.textContent = b.dataset.sort!=='default' ? ((sortDir[b.dataset.sort]??1)===1 ? '↑' : '↓') : ''; });
-    btn.classList.add('active'); render();
+    btn.classList.add('active'); 
+    render(); // เรียงใหม่ -> วาดหน้า 1
   });
 });
 
@@ -399,7 +426,8 @@ function buildAC(q, el) {
     searchQ = item.dataset.title;
     if(document.getElementById('heroSearchInput')) document.getElementById('heroSearchInput').value = searchQ;
     if(document.getElementById('headerSearchInput')) document.getElementById('headerSearchInput').value = searchQ;
-    el.style.display = 'none'; enterBrowse(); render();
+    el.style.display = 'none'; enterBrowse(); 
+    render(); // ค้นหา -> วาดหน้า 1
   }));
 }
 
@@ -419,11 +447,38 @@ function enterBrowse() {
   document.getElementById('browseSection')?.classList.add('visible');
 }
 
+let lastScrollY = window.scrollY;
+
+// ระบบจัดการ Scroll (ทั้งส่วนของ Header และ Infinite Scroll)
 window.addEventListener('scroll', () => {
-  if (window.scrollY > 80 && !isBrowse) enterBrowse();
+  const currentScrollY = window.scrollY;
+
+  // 1. ระบบ Infinite Scroll
+  const isNearBottom = (window.innerHeight + currentScrollY) >= document.body.offsetHeight - 500;
+  // ถ้าเลื่อนลงมาใกล้ขอบล่าง และจำนวนข้อมูลที่โหลดมายังน้อยกว่าข้อมูลทั้งหมดที่มี
+  if (isNearBottom && (currentPage * itemsPerPage < currentFiltered.length)) {
+    currentPage++; // เพิ่มหน้า
+    render(true); // true = ให้โหลดต่อ (Append)
+  }
+
+  // 2. ระบบซ่อน/แสดง Header
+  if (currentScrollY > 80 && !isBrowse) enterBrowse();
+  if (isBrowse) {
+    const header = document.getElementById('mainHeader');
+    if(header) {
+      if (currentScrollY > lastScrollY && currentScrollY > 150) {
+        header.classList.remove('visible'); // เลื่อนลง -> ซ่อน Header
+      } else {
+        header.classList.add('visible'); // เลื่อนขึ้น -> แสดง Header
+      }
+    }
+  }
+  
+  lastScrollY = currentScrollY;
 }, { passive: true });
 
 function toggleMobFilter() { document.getElementById('platformFilters')?.classList.toggle('mob-hidden'); }
 ['platCBs','dubCBs','editPlatCBs','editDubCBs'].forEach(id => { const el=document.getElementById(id); if(el) el.querySelectorAll('.plat-cb').forEach(l=>{const c=l.querySelector('input'); c.addEventListener('change',()=>l.classList.toggle('checked',c.checked))})});
 
+// สั่งโหลดข้อมูลครั้งแรกตอนเปิดเว็บ
 loadData();
