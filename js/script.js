@@ -69,7 +69,7 @@ function setAdmin(val) {
   const migrateArea = document.getElementById('migrateArea');
   if (migrateArea) migrateArea.style.display = val ? 'block' : 'none';
 
-  if (!val) clearSelection(); // เคลียร์ที่ติ๊กเลือกไว้ถ้ากดยกเลิก Admin
+  if (!val) clearSelection();
 
   renderAds();
   render(); 
@@ -178,6 +178,12 @@ function handleCSVUpload() {
           const title = (row.Title || row.title || row['ชื่อเรื่อง'] || '').trim();
           if (!title) continue;
 
+          // 👉 ดึงข้อมูลเสียงพากย์จากคอลัมน์ Dubs, Audio, เสียงพากย์, เสียง
+          const parsedDubs = (row.Dubs || row.dubs || row.Audio || row.audio || row['เสียงพากย์'] || row['เสียง'] || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+
           const movieData = {
             title: title,
             title_th: (row.Title_TH || row.title_th || row['ชื่อไทย'] || '').trim(),
@@ -186,24 +192,21 @@ function handleCSVUpload() {
             genre: (row.Genre || row.genre || row['ประเภท'] || '').trim(),
             country: (row.Country || row.country || row['ประเทศ'] || '').trim(),
             platforms: (row.Platforms || row.platforms || row['แพลตฟอร์ม'] || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
-            dubs: (row.Audio || row.audio || row['เสียง'] || '').split(',').map(s => s.trim()).filter(Boolean)
+            dubs: parsedDubs
           };
           const searchTitle = title.toLowerCase();
 
           if (existingMoviesMap[searchTitle]) {
-            // ลบเรื่องเก่าออก
             const oldDocRef = db.collection('movies').doc(existingMoviesMap[searchTitle]);
             batch.delete(oldDocRef);
             operationCount++;
 
-            // เพิ่มข้อมูลใหม่เข้าไป (ทำให้ได้ ID ใหม่ และ timestamp ใหม่)
             const newDocRef = db.collection('movies').doc();
             movieData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             batch.set(newDocRef, movieData);
             operationCount++;
             replacedCount++;
           } else {
-            // เพิ่มเรื่องใหม่
             const newDocRef = db.collection('movies').doc(); 
             movieData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             batch.set(newDocRef, movieData);
@@ -211,7 +214,7 @@ function handleCSVUpload() {
             addedCount++;
           }
 
-          if (operationCount >= 450) { // Limit < 500
+          if (operationCount >= 450) { 
             await batch.commit();
             batch = db.batch();
             operationCount = 0;
@@ -293,7 +296,6 @@ async function bulkDeleteSelected() {
     }
     if (opCount > 0) await batch.commit();
     
-    // เอาออกจากอาร์เรย์บนหน้าเว็บทันที ไม่ต้องรีโหลด
     movies = movies.filter(m => !selectedMovies.has(m.id));
     selectedMovies.clear();
     updateBulkActionBar();
@@ -383,6 +385,52 @@ async function deleteMovie(id) {
     movies = movies.filter(m => m.id !== id);
     render(); toast('ลบแล้ว', 'ok');
   } catch(e) {}
+}
+
+/* ══════════════════════════════════════════
+   ADS
+══════════════════════════════════════════ */
+async function addAd() {
+  if (!isAdmin) return;
+  const img  = document.getElementById('ad_img').value.trim();
+  const link = document.getElementById('ad_link').value.trim();
+  const side = document.getElementById('ad_side').value;
+  if (!img) { toast('ใส่ URL รูปภาพ', 'err'); return; }
+  try {
+    const data = { side, img, link: link||'', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+    const ref  = await db.collection('ads').add(data);
+    ads.push({ id: ref.id, ...data });
+    document.getElementById('ad_img').value  = '';
+    document.getElementById('ad_link').value = '';
+    renderAds(); toast('เพิ่มโฆษณาสำเร็จ', 'ok');
+  } catch(e) { toast('ผิดพลาด', 'err'); }
+}
+
+async function deleteAd(id) {
+  if (!isAdmin || !confirm('ลบโฆษณานี้?')) return;
+  try {
+    await db.collection('ads').doc(id).delete();
+    ads = ads.filter(a => a.id !== id);
+    renderAds(); toast('ลบแล้ว', 'ok');
+  } catch(e) {}
+}
+
+function renderAds() {
+  const draw = side => {
+    const list = ads.filter(a => a.side === side);
+    if (!list.length) return isAdmin ? `<div class="ad-item">พื้นที่โฆษณา ${side}</div>` : '';
+    return list.map(a => `
+      <div class="ad-item">
+        ${a.link ? `<a href="${a.link}" target="_blank">` : ''}
+        <img src="${a.img}" onerror="this.style.opacity='.2'">
+        ${a.link ? '</a>' : ''}
+        ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
+      </div>`).join('');
+  };
+  const l = document.getElementById('sidebarLeft'); if(l) l.innerHTML = draw('left');
+  const r = document.getElementById('sidebarRight'); if(r) r.innerHTML = draw('right');
+  const m = document.getElementById('mobileAds');
+  if(m) m.innerHTML = ads.length ? ads.map(a=>`<div class="ad-item">${a.link?`<a href="${a.link}" target="_blank">`:''}<img src="${a.img}">${a.link?'</a>':''}${isAdmin?`<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>`:''}</div>`).join('') : '';
 }
 
 /* ══════════════════════════════════════════
