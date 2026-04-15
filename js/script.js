@@ -10,9 +10,6 @@ const FB_CFG = {
   appId: "1:1046787113656:web:e42e64be44f70fd5e2ea4d"
 };
 
-// 📍 ชี้ไปที่ไฟล์ CSV ในโฟลเดอร์ data ของคุณ
-const SHEET_CSV = "data/movies.csv"; 
-
 /* ══════════════════════════════════════════
    FIREBASE INIT
 ══════════════════════════════════════════ */
@@ -65,8 +62,13 @@ function setAdmin(val) {
   }
   const panel = document.getElementById('adminPanel');
   if (panel) panel.classList.toggle('open', val);
+  
+  // ซ่อน/แสดงส่วนอัปโหลด CSV
+  const migrateArea = document.getElementById('migrateArea');
+  if (migrateArea) migrateArea.style.display = val ? 'block' : 'none';
+
   renderAds();
-  render(); // โหลดใหม่เมื่อสถานะแอดมินเปลี่ยน (เพื่อให้ปุ่มแก้ไข/ลบโผล่)
+  render(); 
 }
 
 document.getElementById('authBtn')?.addEventListener('click', () => {
@@ -135,7 +137,7 @@ async function trackVisitor() {
 }
 
 /* ══════════════════════════════════════════
-   LOAD DATA
+   LOAD DATA (โหลดข้อมูลจาก Firebase ล้วนๆ)
 ══════════════════════════════════════════ */
 async function loadData() {
   try {
@@ -145,41 +147,25 @@ async function loadData() {
   } catch (err) {}
 
   try {
+    setLoadStatus('กำลังโหลดข้อมูลจากฐานข้อมูล...');
+    showSkeletons();
+    
+    // ดึงข้อมูลหนังทั้งหมดจาก Firestore เรียงตามวันที่สร้าง
     const snap = await db.collection('movies').orderBy('createdAt', 'desc').get();
+    
     if (snap.docs.length) {
       movies = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
-  } catch (err) {}
+    
+    setLoadStatus(`ข้อมูลในระบบ ${movies.length} เรื่อง`);
+    render(); // วาดหน้าเว็บ
+  } catch (err) {
+    setLoadStatus('❌ โหลดข้อมูลไม่สำเร็จ');
+    showEmpty('ไม่สามารถเชื่อมต่อฐานข้อมูลได้ โปรดตรวจสอบการตั้งค่า Firebase');
+    console.error(err);
+  }
 
-  reloadSheets();
   trackVisitor();
-}
-
-function reloadSheets() {
-  setLoadStatus('กำลังโหลดข้อมูล...');
-  showSkeletons();
-  Papa.parse(SHEET_CSV, {
-    download: true, header: true, skipEmptyLines: true,
-    complete: r => {
-      if (!r.data.length) { setLoadStatus('⚠️ ไม่พบข้อมูล (หรือเซิร์ฟเวอร์ปฏิเสธการอ่านไฟล์)'); return; }
-      const fromSheets = r.data.map((row, i) => ({
-        id: 'sheet_' + i,
-        title:    (row.Title    || row.title    || row['ชื่อเรื่อง'] || '').trim(),
-        title_th: (row.Title_TH || row.title_th || row['ชื่อไทย']   || '').trim(),
-        poster:   (row.Poster   || row.poster   || '').trim(),
-        year:     parseInt(row.Year || row.year || row['ปี'] || '') || null,
-        platforms:(row.Platforms|| row.platforms|| row['แพลตฟอร์ม'] || '').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean),
-        dubs:     (row.Audio    || row.audio    || row['เสียง']      || '').split(',').map(s=>s.trim()).filter(Boolean),
-        genre:    (row.Genre    || row.genre    || row['ประเภท']     || '').trim(),
-        country:  (row.Country  || row.country  || row['ประเทศ']     || '').trim(),
-      })).filter(m => m.title);
-      
-      movies = [...movies.filter(m => !m.id.startsWith('sheet_')), ...fromSheets];
-      setLoadStatus(`โหลดสำเร็จ ${movies.length} เรื่อง`);
-      render(); // วาดหน้าเว็บครั้งแรกเมื่อโหลดเสร็จ
-    },
-    error: () => { setLoadStatus('❌ โหลดไม่สำเร็จ (ต้องเปิดผ่าน Live Server)'); showEmpty('ไม่สามารถอ่านไฟล์ data/movies.csv ได้ ลองเปิดด้วย Live Server'); }
-  });
 }
 
 function setLoadStatus(t) { const el = document.getElementById('loadStatus'); if(el) el.textContent = t; }
@@ -187,7 +173,77 @@ function showSkeletons()  { const grid = document.getElementById('movieGrid'); i
 function showEmpty(msg)   { const grid = document.getElementById('movieGrid'); if(grid) grid.innerHTML = `<div class="empty"><p>⚠️ ${msg}</p></div>`; }
 
 /* ══════════════════════════════════════════
-   ADD / EDIT / DELETE MOVIE
+   BULK UPLOAD: อัปโหลด CSV จากเครื่องคอมพิวเตอร์
+══════════════════════════════════════════ */
+function handleCSVUpload() {
+  const fileInput = document.getElementById('csvUploadInput');
+  const file = fileInput.files[0];
+
+  if (!file) {
+    toast('กรุณาเลือกไฟล์ CSV ก่อนครับ', 'err');
+    return;
+  }
+
+  // ใช้ PapaParse อ่านไฟล์ที่ผู้ใช้เลือก
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: async function(results) {
+      const data = results.data;
+      if (!data || data.length === 0) {
+        toast('ไม่พบข้อมูลในไฟล์ หรือไฟล์ผิดรูปแบบ', 'err');
+        return;
+      }
+
+      if (!confirm(`พบข้อมูลหนัง ${data.length} เรื่องในไฟล์\nต้องการอัปโหลดขึ้น Database หรือไม่?`)) return;
+
+      toast(`กำลังอัปโหลด ${data.length} เรื่อง... โปรดรอสักครู่`, 'ok');
+      
+      let successCount = 0;
+      let errorCount = 0;
+
+      // แปลงและส่งข้อมูลขึ้น Firestore
+      for (const row of data) {
+        // ตรวจสอบว่ามีชื่อเรื่องหรือไม่ (ป้องกันแถวว่าง)
+        const title = (row.Title || row.title || row['ชื่อเรื่อง'] || '').trim();
+        if (!title) continue;
+
+        const movieData = {
+          title: title,
+          title_th: (row.Title_TH || row.title_th || row['ชื่อไทย'] || '').trim(),
+          poster: (row.Poster || row.poster || '').trim(),
+          year: parseInt(row.Year || row.year || row['ปี'] || '') || null,
+          genre: (row.Genre || row.genre || row['ประเภท'] || '').trim(),
+          country: (row.Country || row.country || row['ประเทศ'] || '').trim(),
+          platforms: (row.Platforms || row.platforms || row['แพลตฟอร์ม'] || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+          dubs: (row.Audio || row.audio || row['เสียง'] || '').split(',').map(s => s.trim()).filter(Boolean),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        try {
+          await db.collection('movies').add(movieData);
+          successCount++;
+        } catch (e) {
+          console.error("Upload error on:", title, e);
+          errorCount++;
+        }
+      }
+
+      alert(`🎉 อัปโหลดเสร็จสิ้น!\n\nสำเร็จ: ${successCount} เรื่อง\nผิดพลาด: ${errorCount} เรื่อง`);
+      fileInput.value = ''; // เคลียร์ช่องเลือกไฟล์
+      
+      // รีเฟรชหน้าเว็บใหม่เพื่อดึงข้อมูลอัปเดตล่าสุด
+      window.location.reload(); 
+    },
+    error: function(err) {
+      toast('เกิดข้อผิดพลาดในการอ่านไฟล์', 'err');
+      console.error(err);
+    }
+  });
+}
+
+/* ══════════════════════════════════════════
+   ADD / EDIT / DELETE MOVIE (ผ่านฟอร์มเว็บ)
 ══════════════════════════════════════════ */
 async function addMovie() {
   if (!isAdmin) { toast('กรุณา Login ก่อน', 'err'); return; }
@@ -255,7 +311,7 @@ async function saveEdit() {
     dubs:      [...document.querySelectorAll('#editDubCBs  input:checked')].map(c=>c.value),
   };
   try {
-    if (!id.startsWith('sheet_')) await db.collection('movies').doc(id).update(data);
+    await db.collection('movies').doc(id).update(data);
     const i = movies.findIndex(m => m.id === id);
     if (i > -1) movies[i] = { ...movies[i], ...data };
     closeEditModal(); render(); toast('บันทึกแล้ว ✓', 'ok');
@@ -265,7 +321,7 @@ async function saveEdit() {
 async function deleteMovie(id) {
   if (!isAdmin || !confirm('ยืนยันลบหนังเรื่องนี้?')) return;
   try {
-    if (!id.startsWith('sheet_')) await db.collection('movies').doc(id).delete();
+    await db.collection('movies').doc(id).delete();
     movies = movies.filter(m => m.id !== id);
     render(); toast('ลบแล้ว', 'ok');
   } catch(e) { toast('ลบไม่สำเร็จ', 'err'); }
@@ -318,11 +374,10 @@ function renderAds() {
 }
 
 /* ══════════════════════════════════════════
-   RENDER MOVIES (พร้อมระบบ Infinite Scroll)
+   RENDER MOVIES (ระบบ Infinite Scroll)
 ══════════════════════════════════════════ */
 const PLAT_LABEL = { netflix:'Netflix', disney:'Disney+', hbo:'HBO Max', prime:'Prime Video', apple:'Apple TV+', hulu:'Hulu', youtube:'YouTube', other:'อื่นๆ' };
 
-// แยกฟังก์ชันดึงข้อมูลที่กรองและเรียงลำดับแล้วออกมา
 function getFilteredAndSorted() {
   const q = searchQ.toLowerCase().trim();
   let filtered = movies.filter(m => {
@@ -342,14 +397,11 @@ function getFilteredAndSorted() {
   return filtered;
 }
 
-// ฟังก์ชัน Render (รับค่า isAppend เพื่อบอกว่าเป็นการเลื่อนโหลดต่อหรือไม่)
 function render(isAppend = false) {
-  // ถ้าเป็นการค้นหาใหม่ หรือเปลี่ยนฟิลเตอร์ ให้รีเซ็ตหน้าเป็นหน้าแรก
   if (!isAppend) {
     currentPage = 1;
     currentFiltered = getFilteredAndSorted();
     
-    // อัปเดตจำนวนทั้งหมดที่ค้นเจอ
     const countEl = document.getElementById('countNum');
     if(countEl) countEl.textContent = currentFiltered.length;
   }
@@ -357,19 +409,16 @@ function render(isAppend = false) {
   const grid = document.getElementById('movieGrid');
   if(!grid) return;
 
-  // กรณีไม่พบข้อมูลเลย
   if (!currentFiltered.length) { 
     grid.innerHTML = `<div class="empty"><p>🔍 ไม่พบเรื่องที่ค้นหา</p></div>`; 
     return; 
   }
 
-  // คำนวณขอบเขตข้อมูลที่จะนำมาแสดง
   const endIndex = currentPage * itemsPerPage;
   const itemsToRender = currentFiltered.slice(0, endIndex);
 
-  // วาด HTML ของการ์ดหนัง
   const htmlString = itemsToRender.map((m, i) => {
-    const dl  = Math.min((i % itemsPerPage) * 0.03, 0.5); // รีเซ็ต delay การโหลดของแต่ละหน้า
+    const dl  = Math.min((i % itemsPerPage) * 0.03, 0.5); 
     const pos = m.poster
       ? `<img src="${m.poster}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-poster\\'>🎬</div>'">`
       : `<div class="no-poster">🎬</div>`;
@@ -401,7 +450,7 @@ document.getElementById('platformFilters')?.addEventListener('click', e => {
   if (!btn) return;
   document.querySelectorAll('#platformFilters .pill').forEach(b => b.classList.remove('active'));
   btn.classList.add('active'); filterPlatform = btn.dataset.platform; 
-  render(); // ค้นหาใหม่ -> วาดหน้า 1
+  render(); 
 });
 
 document.querySelectorAll('.sort-btn').forEach(btn => {
@@ -412,7 +461,7 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
     else { sortKey = key; if (!sortDir[key]) sortDir[key] = 1; }
     document.querySelectorAll('.sort-btn').forEach(b => { b.classList.remove('active'); const ar = b.querySelector('span'); if(ar) ar.textContent = b.dataset.sort!=='default' ? ((sortDir[b.dataset.sort]??1)===1 ? '↑' : '↓') : ''; });
     btn.classList.add('active'); 
-    render(); // เรียงใหม่ -> วาดหน้า 1
+    render(); 
   });
 });
 
@@ -427,7 +476,7 @@ function buildAC(q, el) {
     if(document.getElementById('heroSearchInput')) document.getElementById('heroSearchInput').value = searchQ;
     if(document.getElementById('headerSearchInput')) document.getElementById('headerSearchInput').value = searchQ;
     el.style.display = 'none'; enterBrowse(); 
-    render(); // ค้นหา -> วาดหน้า 1
+    render(); 
   }));
 }
 
@@ -449,27 +498,23 @@ function enterBrowse() {
 
 let lastScrollY = window.scrollY;
 
-// ระบบจัดการ Scroll (ทั้งส่วนของ Header และ Infinite Scroll)
 window.addEventListener('scroll', () => {
   const currentScrollY = window.scrollY;
 
-  // 1. ระบบ Infinite Scroll
   const isNearBottom = (window.innerHeight + currentScrollY) >= document.body.offsetHeight - 500;
-  // ถ้าเลื่อนลงมาใกล้ขอบล่าง และจำนวนข้อมูลที่โหลดมายังน้อยกว่าข้อมูลทั้งหมดที่มี
   if (isNearBottom && (currentPage * itemsPerPage < currentFiltered.length)) {
-    currentPage++; // เพิ่มหน้า
-    render(true); // true = ให้โหลดต่อ (Append)
+    currentPage++; 
+    render(true); 
   }
 
-  // 2. ระบบซ่อน/แสดง Header
   if (currentScrollY > 80 && !isBrowse) enterBrowse();
   if (isBrowse) {
     const header = document.getElementById('mainHeader');
     if(header) {
       if (currentScrollY > lastScrollY && currentScrollY > 150) {
-        header.classList.remove('visible'); // เลื่อนลง -> ซ่อน Header
+        header.classList.remove('visible'); 
       } else {
-        header.classList.add('visible'); // เลื่อนขึ้น -> แสดง Header
+        header.classList.add('visible'); 
       }
     }
   }
@@ -480,63 +525,5 @@ window.addEventListener('scroll', () => {
 function toggleMobFilter() { document.getElementById('platformFilters')?.classList.toggle('mob-hidden'); }
 ['platCBs','dubCBs','editPlatCBs','editDubCBs'].forEach(id => { const el=document.getElementById(id); if(el) el.querySelectorAll('.plat-cb').forEach(l=>{const c=l.querySelector('input'); c.addEventListener('change',()=>l.classList.toggle('checked',c.checked))})});
 
-/* ══════════════════════════════════════════
-   MIGRATION: อัปโหลด CSV -> FIRESTORE
-══════════════════════════════════════════ */
-async function migrateCSVtoFirestore() {
-  if (!isAdmin) {
-    toast('กรุณาล็อกอินแอดมินก่อนครับ', 'err');
-    return;
-  }
-
-  // 1. คัดกรองเอาเฉพาะข้อมูลหนังที่อ่านมาจาก CSV (เราตั้ง ID ไว้ว่ามันจะขึ้นต้นด้วย 'sheet_')
-  const csvMovies = movies.filter(m => m.id.startsWith('sheet_'));
-
-  if (csvMovies.length === 0) {
-    alert("ไม่พบข้อมูลจากไฟล์ CSV หรือคุณอาจจะอัปโหลดไปหมดแล้ว");
-    return;
-  }
-
-  const confirmMsg = `ยืนยันการอัปโหลดข้อมูลหนังจำนวน ${csvMovies.length} เรื่อง ลง Firebase หรือไม่?\n\nกระบวนการนี้อาจใช้เวลาสักครู่ กรุณาอย่าปิดหน้าต่างจนกว่าจะเสร็จ`;
-  if (!confirm(confirmMsg)) return;
-
-  toast(`เริ่มอัปโหลด ${csvMovies.length} เรื่อง... กรุณารอสักครู่`, 'ok');
-  
-  let successCount = 0;
-  let errorCount = 0;
-
-  // 2. วนลูปส่งข้อมูลขึ้น Firestore ทีละรายการ
-  for (const m of csvMovies) {
-    try {
-      // ดึงตัวแปร ID ทิ้งไป (เพราะ Firebase จะสร้าง ID ใหม่อัตโนมัติ)
-      const { id, ...movieData } = m;
-      
-      // เพิ่ม Timestamp ว่าอัปโหลดเมื่อไหร่
-      movieData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-
-      // สั่งบันทึกลง Database
-      await db.collection('movies').add(movieData);
-      successCount++;
-      console.log(`✅ อัปโหลดสำเร็จ: ${m.title} (${successCount}/${csvMovies.length})`);
-    } catch (e) {
-      errorCount++;
-      console.error(`❌ ผิดพลาดที่เรื่อง: ${m.title}`, e);
-    }
-  }
-
-  alert(`🎉 อัปโหลดเสร็จสิ้น!\n\nสำเร็จ: ${successCount} เรื่อง\nผิดพลาด: ${errorCount} เรื่อง`);
-  
-  // โหลดหน้าเว็บใหม่เพื่อดึงข้อมูลจาก Firebase มาแสดง
-  window.location.reload();
-}
-
-// แก้ไขฟังก์ชัน setAdmin เดิมนิดหน่อย เพื่อให้แสดงปุ่ม Migrate เฉพาะตอนที่ล็อกอิน
-const originalSetAdmin = setAdmin;
-setAdmin = function(val) {
-  originalSetAdmin(val);
-  const migrateArea = document.getElementById('migrateArea');
-  if (migrateArea) migrateArea.style.display = val ? 'block' : 'none';
-}
-
-// สั่งโหลดข้อมูลครั้งแรกตอนเปิดเว็บ
+// เริ่มทำงานเมื่อไฟล์โหลดเสร็จ
 loadData();
