@@ -23,17 +23,20 @@ const auth = firebase.auth();
 let isAdmin    = false;
 let movies     = [];
 let ads        = [];
+
+// Filters & Sort
 let filterPlatform = 'all';
-let searchQ    = '';
-let sortKey    = 'default';
-let sortDir    = {};
-let isBrowse   = false;
+let filterType     = 'all'; // หมวดหมู่: movie, series, animation, documentary
+let searchQ        = '';
+let sortKey        = 'year'; // 1. ตั้งค่าเริ่มต้นเรียงตามปี
+let sortDir        = { year: -1, title_th: 1, title_en: 1 }; // ปี=มากไปน้อย
+let isBrowse       = false;
 
 // Infinite Scroll
 const PAGE_SIZE    = 24;
 let currentPage    = 1;
 let currentFiltered = [];
-let isRendering    = false; // ป้องกัน double-render
+let isRendering    = false;
 
 // Bulk Action
 let selectedMovies = new Set();
@@ -50,7 +53,7 @@ function toast(msg, type = '') {
 }
 
 /* ══════════════════════════════════════════
-   AUTH — Firebase only (ไม่มีรหัสผ่านใน code)
+   AUTH — Firebase
 ══════════════════════════════════════════ */
 auth.onAuthStateChanged(user => {
   setAdmin(!!user);
@@ -65,13 +68,16 @@ function setAdmin(val) {
   const btnSelectAll = document.getElementById('btnSelectAll');
 
   if (btn) {
-    btn.textContent = val ? '🚪 ออกจากระบบ' : 'Admin Login';
     btn.classList.toggle('logged-in', val);
+    // เปลี่ยนไอคอนตามสถานะ
+    if (val) {
+      btn.innerHTML = `<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
+    } else {
+      btn.innerHTML = `<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    }
   }
   if (panel)      panel.classList.toggle('open', val);
   if (migrateArea) migrateArea.style.display = val ? 'block' : 'none';
-
-  // ✅ FIX: ใช้ class แทน ~ CSS selector
   if (btnSelectAll) btnSelectAll.classList.toggle('visible', val);
 
   if (!val) clearSelection();
@@ -115,17 +121,15 @@ document.getElementById('loginModal')?.addEventListener('click', e => {
 });
 
 /* ══════════════════════════════════════════
-   LOAD DATA (Firestore เท่านั้น)
+   LOAD DATA
 ══════════════════════════════════════════ */
 async function loadData() {
-  // โหลด Ads
   try {
     const snap = await db.collection('ads').get();
     ads = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderAds();
   } catch {}
 
-  // โหลด Movies
   try {
     setLoadStatus('กำลังโหลดข้อมูล...');
     showSkeletons();
@@ -139,7 +143,6 @@ async function loadData() {
     showEmpty('ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
   }
 
-  // Visitor Counter
   try {
     const ref = db.collection('stats').doc('visitors');
     await ref.set({ count: firebase.firestore.FieldValue.increment(1) }, { merge: true });
@@ -163,7 +166,7 @@ function showEmpty(msg) {
 }
 
 /* ══════════════════════════════════════════
-   BULK CSV UPLOAD (Smart Replace)
+   BULK CSV UPLOAD
 ══════════════════════════════════════════ */
 function handleCSVUpload() {
   const fileInput = document.getElementById('csvUploadInput');
@@ -178,7 +181,6 @@ function handleCSVUpload() {
       if (!data?.length) { toast('ไม่พบข้อมูลในไฟล์', 'err'); return; }
 
       if (!confirm(`พบ ${data.length} เรื่อง\nระบบจะ "แทนที่" หากชื่อซ้ำกับที่มีอยู่\nดำเนินการต่อ?`)) return;
-
       toast(`กำลังอัปโหลด ${data.length} เรื่อง... อย่าปิดหน้าเว็บ`, 'ok');
 
       let added = 0; let replaced = 0;
@@ -209,11 +211,9 @@ function handleCSVUpload() {
             dubs,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           };
-
           const key = title.toLowerCase();
 
           if (existingMap[key]) {
-            // ลบเก่าแล้วทับด้วยใหม่
             batch.delete(db.collection('movies').doc(existingMap[key]));
             batch.set(db.collection('movies').doc(), movieData);
             opCount += 2; replaced++;
@@ -222,7 +222,6 @@ function handleCSVUpload() {
             opCount++; added++;
           }
 
-          // Firebase batch limit = 500 operations
           if (opCount >= 450) {
             await batch.commit();
             batch = db.batch();
@@ -235,7 +234,6 @@ function handleCSVUpload() {
         fileInput.value = '';
         setTimeout(() => window.location.reload(), 1500);
       } catch (err) {
-        console.error('CSV Upload Error:', err);
         toast('เกิดข้อผิดพลาดระหว่างอัปโหลด', 'err');
       }
     }
@@ -296,7 +294,6 @@ async function bulkDeleteSelected() {
     render();
     toast('ลบสำเร็จ ✓', 'ok');
   } catch (err) {
-    console.error('Bulk Delete Error:', err);
     toast('เกิดข้อผิดพลาดในการลบ', 'err');
   }
 }
@@ -309,8 +306,7 @@ async function addMovie() {
   const title = document.getElementById('f_title')?.value.trim();
   if (!title) { toast('กรุณาใส่ชื่อเรื่อง', 'err'); return; }
   const platforms = [...document.querySelectorAll('#platCBs input:checked')].map(c => c.value);
-  if (!platforms.length) { toast('เลือกอย่างน้อย 1 Platform', 'err'); return; }
-
+  
   const data = {
     title,
     title_th: document.getElementById('f_title_th')?.value.trim() || '',
@@ -432,11 +428,6 @@ async function addAd() {
   if (!img_sq && !img_banner) {
     toast('กรุณาใส่รูปอย่างน้อย 1 แบบ', 'err'); return;
   }
-  // ตรวจ URL
-  const urlOk = u => !u || u.startsWith('http');
-  if (!urlOk(img_sq) || !urlOk(img_banner)) {
-    toast('URL ไม่ถูกต้อง', 'err'); return;
-  }
 
   const sideAds = ads.filter(a => a.side === side);
   if (sideAds.length >= 5) {
@@ -470,13 +461,10 @@ async function deleteAd(id) {
 }
 
 function renderAds() {
-  // PC Sidebar (จัตุรัส 1:1, จำกัด 5 รูป/ข้าง)
   const drawPC = side => {
     const list = ads.filter(a => a.side === side && a.img_sq).slice(0, 5);
     if (!list.length) {
-      return isAdmin
-        ? `<div class="ad-item ad-sq"><div class="ad-placeholder">พื้นที่โฆษณา ${side}<br>(PC 1:1)</div></div>`
-        : '';
+      return isAdmin ? `<div class="ad-item ad-sq"><div class="ad-placeholder">พื้นที่โฆษณา ${side}<br>(PC 1:1)</div></div>` : '';
     }
     return list.map(a => `
       <div class="ad-item ad-sq">
@@ -491,14 +479,11 @@ function renderAds() {
   if (l) l.innerHTML = drawPC('left');
   if (r) r.innerHTML = drawPC('right');
 
-  // Mobile Banner (แนวนอน)
   const m = document.getElementById('mobileAds');
   if (!m) return;
   const bannerList = ads.filter(a => a.img_banner || a.img_sq);
   if (!bannerList.length) {
-    m.innerHTML = isAdmin
-      ? `<div class="ad-item ad-banner"><div class="ad-placeholder">พื้นที่โฆษณา Mobile Banner</div></div>`
-      : '';
+    m.innerHTML = isAdmin ? `<div class="ad-item ad-banner"><div class="ad-placeholder">พื้นที่โฆษณา Mobile Banner</div></div>` : '';
     return;
   }
   m.innerHTML = bannerList.map(a => {
@@ -514,7 +499,6 @@ function renderAds() {
 
 /* ══════════════════════════════════════════
    RENDER MOVIES + INFINITE SCROLL
-   ✅ FIX: append mode ไม่ใช้ innerHTML ทับ
 ══════════════════════════════════════════ */
 const PLAT_LABEL = {
   netflix:'Netflix', disney:'Disney+', hbo:'HBO Max', prime:'Prime Video',
@@ -531,14 +515,23 @@ function getFilteredAndSorted() {
       || (m.genre  ||'').toLowerCase().includes(q)
       || String(m.year||'').includes(q);
     const mp = filterPlatform === 'all' || (m.platforms||[]).includes(filterPlatform);
-    return ms && mp;
+    
+    // ตรรกะการฟิลเตอร์หมวดหมู่ด้านบน (Type Filter)
+    let mt = true;
+    const g = (m.genre || '').toLowerCase();
+    if (filterType === 'series') mt = g.includes('series') || g.includes('ซีรีส์');
+    else if (filterType === 'animation') mt = g.includes('animation') || g.includes('anime') || g.includes('การ์ตูน');
+    else if (filterType === 'documentary') mt = g.includes('documentary') || g.includes('สารคดี');
+    else if (filterType === 'movie') mt = !g.includes('series') && !g.includes('animation') && !g.includes('anime') && !g.includes('documentary') && !g.includes('ซีรีส์') && !g.includes('การ์ตูน') && !g.includes('สารคดี');
+
+    return ms && mp && mt;
   });
 
   if (sortKey !== 'default') {
     const d = sortDir[sortKey] ?? 1;
     list = [...list].sort((a, b) => {
       let va, vb;
-      if (sortKey === 'year')     { va = a.year||0; vb = b.year||0; }
+      if (sortKey === 'year') { va = a.year||0; vb = b.year||0; }
       else if (sortKey === 'title_th') { va=(a.title_th||'').toLowerCase(); vb=(b.title_th||'').toLowerCase(); }
       else { va=(a.title||'').toLowerCase(); vb=(b.title||'').toLowerCase(); }
       return va < vb ? -d : va > vb ? d : 0;
@@ -587,7 +580,6 @@ function render(isAppend = false) {
   if (!grid) return;
 
   if (!isAppend) {
-    // Full re-render: reset state
     currentPage     = 1;
     currentFiltered = getFilteredAndSorted();
     if (countEl) countEl.textContent = currentFiltered.length;
@@ -605,7 +597,6 @@ function render(isAppend = false) {
     const items = currentFiltered.slice(0, PAGE_SIZE);
     grid.innerHTML = items.map((m, i) => buildCardHTML(m, i, false)).join('');
   } else {
-    // ✅ FIX: Append mode → สร้างการ์ดใหม่แล้ว append ต่อท้าย (ไม่ทับ)
     const start = (currentPage - 1) * PAGE_SIZE;
     const end   = currentPage * PAGE_SIZE;
     const items = currentFiltered.slice(start, end);
@@ -618,7 +609,6 @@ function render(isAppend = false) {
     });
   }
 
-  // แสดง/ซ่อน loader ตาม total
   const totalShown = currentPage * PAGE_SIZE;
   if (loader) {
     loader.style.display = totalShown < currentFiltered.length ? 'flex' : 'none';
@@ -637,17 +627,30 @@ document.getElementById('platformFilters')?.addEventListener('click', e => {
   render();
 });
 
+// หมวดหมู่ Header
+document.querySelectorAll('.type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterType = btn.dataset.type;
+    enterBrowse();
+    render();
+  });
+});
+
 document.querySelectorAll('.sort-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const key = btn.dataset.sort;
     if (key === 'default') { sortKey = 'default'; }
     else if (sortKey === key) { sortDir[key] = (sortDir[key] ?? 1) * -1; }
     else { sortKey = key; if (!sortDir[key]) sortDir[key] = 1; }
+    
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.remove('active');
       const ar = b.querySelector('span');
-      if (ar && b.dataset.sort !== 'default') {
-        ar.textContent = (sortDir[b.dataset.sort] ?? 1) === 1 ? '↑' : '↓';
+      if (ar) ar.textContent = ''; // Reset arrow
+      if (b.dataset.sort === sortKey && ar) {
+         ar.textContent = (sortDir[sortKey] ?? 1) === 1 ? '↑' : '↓';
       }
     });
     btn.classList.add('active');
@@ -700,7 +703,6 @@ function buildAC(q, el) {
   if (!inp || !ac) return;
   inp.addEventListener('input', e => {
     searchQ = e.target.value;
-    // sync both inputs
     ['heroSearchInput','headerSearchInput'].forEach(id => {
       const el = document.getElementById(id);
       if (el && el !== inp) el.value = searchQ;
@@ -721,14 +723,15 @@ function buildAC(q, el) {
 
 document.addEventListener('click', e => {
   if (!e.target.closest('.hero-search-wrap')) {
-    document.getElementById('heroAC').style.display = 'none';
+    const hac = document.getElementById('heroAC');
+    if (hac) hac.style.display = 'none';
   }
   if (!e.target.closest('#headerSearch')) {
-    document.getElementById('headerAC').style.display = 'none';
+    const hac = document.getElementById('headerAC');
+    if (hac) hac.style.display = 'none';
   }
 });
 
-/* Hero hint chips */
 document.querySelectorAll('.hint-chip').forEach(chip => {
   chip.addEventListener('click', () => {
     filterPlatform = chip.dataset.platform;
@@ -741,9 +744,72 @@ document.querySelectorAll('.hint-chip').forEach(chip => {
 });
 
 /* ══════════════════════════════════════════
+   NAVIGATION (Go Home)
+══════════════════════════════════════════ */
+function goHome() {
+  // รีเซ็ตค่าการค้นหาและฟิลเตอร์ทั้งหมด
+  isBrowse = false;
+  searchQ = '';
+  filterPlatform = 'all';
+  filterType = 'all';
+  sortKey = 'year';
+  sortDir = { year: -1, title_th: 1, title_en: 1 };
+
+  // ล้างช่องค้นหา
+  if(document.getElementById('heroSearchInput')) document.getElementById('heroSearchInput').value = '';
+  if(document.getElementById('headerSearchInput')) document.getElementById('headerSearchInput').value = '';
+
+  // รีเซ็ตปุ่ม UI
+  document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.platform === 'all'));
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('active', b.dataset.type === 'all'));
+  document.querySelectorAll('.sort-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sort === 'year');
+    const ar = b.querySelector('span');
+    if (ar) ar.textContent = b.dataset.sort === 'year' ? '↓' : '';
+  });
+
+  // ซ่อนหน้า Browse และแสดง Hero
+  document.getElementById('heroSection')?.classList.remove('collapsed');
+  document.getElementById('mainHeader')?.classList.remove('visible');
+  document.getElementById('browseSection')?.classList.remove('visible');
+
+  // เลื่อนกลับด้านบนสุด
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  render();
+}
+
+/* ══════════════════════════════════════════
+   MOBILE TOUCH GESTURES (Back & Refresh)
+══════════════════════════════════════════ */
+let touchStartX = 0;
+let touchStartY = 0;
+
+document.addEventListener('touchstart', e => {
+  touchStartX = e.changedTouches[0].screenX;
+  touchStartY = e.changedTouches[0].screenY;
+}, { passive: true });
+
+document.addEventListener('touchend', e => {
+  const touchEndX = e.changedTouches[0].screenX;
+  const touchEndY = e.changedTouches[0].screenY;
+  const deltaX = touchEndX - touchStartX;
+  const deltaY = touchEndY - touchStartY;
+
+  // 1. ปัดจากขอบซ้ายไปขวา (Back to Home)
+  // เริ่มทัชจากขอบจอ (< 40px) และลากไปทางขวามากกว่า 100px (แนวนอน)
+  if (touchStartX < 40 && deltaX > 100 && Math.abs(deltaY) < 50) {
+    goHome();
+  }
+
+  // 2. ปัดจากบนลงล่าง (Pull to Refresh)
+  // ต้องอยู่บนสุดของหน้าจอ (scrollY === 0) และลากลงมากกว่า 150px
+  if (window.scrollY === 0 && deltaY > 150 && Math.abs(deltaX) < 50) {
+    window.location.reload();
+  }
+}, { passive: true });
+
+/* ══════════════════════════════════════════
    SCROLL LOGIC
-   ✅ FIX: header ค้างตลอด ไม่ซ่อนเมื่อ scroll ลง
-   + Infinite Scroll
 ══════════════════════════════════════════ */
 function enterBrowse() {
   if (isBrowse) return;
@@ -757,18 +823,13 @@ window.addEventListener('scroll', () => {
   const scrollY      = window.scrollY;
   const nearBottom   = (window.innerHeight + scrollY) >= document.body.offsetHeight - 600;
 
-  // Trigger browse mode
   if (scrollY > 80 && !isBrowse) enterBrowse();
 
-  // ✅ FIX: ไม่ซ่อน header เมื่อ scroll ลง — header ค้างบนสุดตลอด
-  // (ลบ logic hide-on-scroll ออก)
-
-  // Infinite Scroll: append เพิ่มหน้าถัดไป
   if (nearBottom && !isRendering && currentPage * PAGE_SIZE < currentFiltered.length) {
     isRendering = true;
     currentPage++;
     render(true);
-    setTimeout(() => isRendering = false, 300); // debounce
+    setTimeout(() => isRendering = false, 300);
   }
 }, { passive: true });
 
@@ -779,7 +840,6 @@ function toggleMobFilter() {
   document.getElementById('platformFilters')?.classList.toggle('mob-hidden');
 }
 
-// Init checkboxes
 ['platCBs','dubCBs','editPlatCBs','editDubCBs'].forEach(id => {
   const el = document.getElementById(id);
   if (!el) return;
