@@ -480,5 +480,63 @@ window.addEventListener('scroll', () => {
 function toggleMobFilter() { document.getElementById('platformFilters')?.classList.toggle('mob-hidden'); }
 ['platCBs','dubCBs','editPlatCBs','editDubCBs'].forEach(id => { const el=document.getElementById(id); if(el) el.querySelectorAll('.plat-cb').forEach(l=>{const c=l.querySelector('input'); c.addEventListener('change',()=>l.classList.toggle('checked',c.checked))})});
 
+/* ══════════════════════════════════════════
+   MIGRATION: อัปโหลด CSV -> FIRESTORE
+══════════════════════════════════════════ */
+async function migrateCSVtoFirestore() {
+  if (!isAdmin) {
+    toast('กรุณาล็อกอินแอดมินก่อนครับ', 'err');
+    return;
+  }
+
+  // 1. คัดกรองเอาเฉพาะข้อมูลหนังที่อ่านมาจาก CSV (เราตั้ง ID ไว้ว่ามันจะขึ้นต้นด้วย 'sheet_')
+  const csvMovies = movies.filter(m => m.id.startsWith('sheet_'));
+
+  if (csvMovies.length === 0) {
+    alert("ไม่พบข้อมูลจากไฟล์ CSV หรือคุณอาจจะอัปโหลดไปหมดแล้ว");
+    return;
+  }
+
+  const confirmMsg = `ยืนยันการอัปโหลดข้อมูลหนังจำนวน ${csvMovies.length} เรื่อง ลง Firebase หรือไม่?\n\nกระบวนการนี้อาจใช้เวลาสักครู่ กรุณาอย่าปิดหน้าต่างจนกว่าจะเสร็จ`;
+  if (!confirm(confirmMsg)) return;
+
+  toast(`เริ่มอัปโหลด ${csvMovies.length} เรื่อง... กรุณารอสักครู่`, 'ok');
+  
+  let successCount = 0;
+  let errorCount = 0;
+
+  // 2. วนลูปส่งข้อมูลขึ้น Firestore ทีละรายการ
+  for (const m of csvMovies) {
+    try {
+      // ดึงตัวแปร ID ทิ้งไป (เพราะ Firebase จะสร้าง ID ใหม่อัตโนมัติ)
+      const { id, ...movieData } = m;
+      
+      // เพิ่ม Timestamp ว่าอัปโหลดเมื่อไหร่
+      movieData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+
+      // สั่งบันทึกลง Database
+      await db.collection('movies').add(movieData);
+      successCount++;
+      console.log(`✅ อัปโหลดสำเร็จ: ${m.title} (${successCount}/${csvMovies.length})`);
+    } catch (e) {
+      errorCount++;
+      console.error(`❌ ผิดพลาดที่เรื่อง: ${m.title}`, e);
+    }
+  }
+
+  alert(`🎉 อัปโหลดเสร็จสิ้น!\n\nสำเร็จ: ${successCount} เรื่อง\nผิดพลาด: ${errorCount} เรื่อง`);
+  
+  // โหลดหน้าเว็บใหม่เพื่อดึงข้อมูลจาก Firebase มาแสดง
+  window.location.reload();
+}
+
+// แก้ไขฟังก์ชัน setAdmin เดิมนิดหน่อย เพื่อให้แสดงปุ่ม Migrate เฉพาะตอนที่ล็อกอิน
+const originalSetAdmin = setAdmin;
+setAdmin = function(val) {
+  originalSetAdmin(val);
+  const migrateArea = document.getElementById('migrateArea');
+  if (migrateArea) migrateArea.style.display = val ? 'block' : 'none';
+}
+
 // สั่งโหลดข้อมูลครั้งแรกตอนเปิดเว็บ
 loadData();
