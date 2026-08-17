@@ -42,6 +42,37 @@ let isRendering    = false;
 let selectedMovies = new Set();
 
 /* ══════════════════════════════════════════
+   SECURITY HELPERS
+   NOTE: isAdmin below only toggles what the UI *shows*.
+   It is NOT a security boundary — anyone can set
+   `isAdmin = true` in the browser console. The real
+   protection MUST live in Firestore Security Rules
+   (see firestore.rules). Every write call below will
+   fail server-side for a non-authenticated user as long
+   as the rules are deployed correctly, even if someone
+   bypasses this client-side flag.
+══════════════════════════════════════════ */
+
+// Escapes HTML special characters before inserting user-supplied
+// text (movie titles, genres, etc.) into innerHTML, preventing
+// stored XSS from malicious/careless data entry or CSV uploads.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
+// Safe attribute-value escaping (for use inside "…" HTML attributes,
+// e.g. value="", data-title="")
+function escAttr(s) {
+  return esc(s);
+}
+
+/* ══════════════════════════════════════════
    TOAST
 ══════════════════════════════════════════ */
 function toast(msg, type = '') {
@@ -161,7 +192,7 @@ function showSkeletons() {
 }
 function showEmpty(msg) {
   const grid = document.getElementById('movieGrid');
-  if (grid) grid.innerHTML = `<div class="empty"><p>⚠️ ${msg}</p></div>`;
+  if (grid) grid.innerHTML = `<div class="empty"><p>⚠️ ${esc(msg)}</p></div>`;
 }
 
 /* ══════════════════════════════════════════
@@ -182,7 +213,8 @@ function handleCSVUpload() {
       if (!confirm(`พบ ${data.length} เรื่อง\nระบบจะ "แทนที่" หากชื่อซ้ำกับที่มีอยู่\nดำเนินการต่อ?`)) return;
       toast(`กำลังอัปโหลด ${data.length} เรื่อง... อย่าปิดหน้าเว็บ`, 'ok');
 
-      let added = 0; let replaced = 0;
+      let added = 0; let replaced = 0; let skipped = 0;
+      const skippedRows = [];
       const existingMap = {};
       movies.forEach(m => {
         if (m.title) existingMap[m.title.trim().toLowerCase()] = m.id;
@@ -192,18 +224,26 @@ function handleCSVUpload() {
       let opCount = 0;
 
       try {
-        for (const row of data) {
+        for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
+          const row = data[rowIdx];
           const title = (row.Title || row.title || row['ชื่อเรื่อง'] || '').trim();
-          if (!title) continue;
+          if (!title) { skipped++; skippedRows.push(rowIdx + 2); continue; } // +2 = header row + 1-index
 
           const dubs = (row.Dubs || row.dubs || row.Audio || row.audio || row['เสียงพากย์'] || '')
             .split(',').map(s => s.trim()).filter(Boolean);
+
+          const yearRaw = row.Year || row.year || row['ปี'] || '';
+          const yearParsed = parseInt(yearRaw);
+          const year = Number.isFinite(yearParsed) ? yearParsed : null;
+          if (yearRaw && year === null) {
+            console.warn(`แถวที่ ${rowIdx + 2}: ปี "${yearRaw}" ไม่ใช่ตัวเลข ถูกบันทึกเป็นค่าว่าง`);
+          }
 
           const movieData = {
             title,
             title_th: (row.Title_TH || row.title_th || row['ชื่อไทย']  || '').trim(),
             poster:   (row.Poster   || row.poster   || '').trim(),
-            year:     parseInt(row.Year || row.year || row['ปี'] || '') || null,
+            year,
             genre:    (row.Genre    || row.genre    || row['ประเภท']    || '').trim(),
             country:  (row.Country  || row.country  || row['ประเทศ']   || '').trim(),
             platforms:(row.Platforms|| row.platforms|| row['แพลตฟอร์ม']|| '').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean),
@@ -229,7 +269,12 @@ function handleCSVUpload() {
         }
         if (opCount > 0) await batch.commit();
 
-        toast(`✓ เพิ่ม ${added} เรื่อง / แทนที่ ${replaced} เรื่อง`, 'ok');
+        let summary = `✓ เพิ่ม ${added} เรื่อง / แทนที่ ${replaced} เรื่อง`;
+        if (skipped) summary += ` / ข้าม ${skipped} แถว (ไม่มีชื่อเรื่อง)`;
+        toast(summary, 'ok');
+        if (skipped) {
+          console.warn('แถวที่ถูกข้าม (ไม่มีชื่อเรื่อง):', skippedRows.join(', '));
+        }
         fileInput.value = '';
         setTimeout(() => window.location.reload(), 1500);
       } catch (err) {
@@ -305,7 +350,7 @@ async function addMovie() {
   const title = document.getElementById('f_title')?.value.trim();
   if (!title) { toast('กรุณาใส่ชื่อเรื่อง', 'err'); return; }
   const platforms = [...document.querySelectorAll('#platCBs input:checked')].map(c => c.value);
-  
+
   const data = {
     title,
     title_th: document.getElementById('f_title_th')?.value.trim() || '',
@@ -470,7 +515,7 @@ function renderAds() {
   // PC Sidebar (จัตุรัส 1:1, จำกัด 5 รูป/ข้าง)
   const drawPC = side => {
     const list = ads.filter(a => a.side === side && a.img_sq).slice(0, 5);
-    
+
     // ถ้าไม่มีโฆษณาเลย ให้โชว์กรอบโปร่งแสง 1 กรอบ
     if (!list.length) {
       return `<div class="ad-item ad-sq">${defaultPlaceholder}</div>`;
@@ -478,9 +523,9 @@ function renderAds() {
 
     return list.map(a => `
       <div class="ad-item ad-sq">
-        ${a.link ? `<a href="${a.link}" target="_blank" rel="noopener"></a>` : ''}
-        <img src="${a.img_sq}" alt="ad" onerror="this.style.opacity='.15'">
-        ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
+        ${a.link ? `<a href="${escAttr(a.link)}" target="_blank" rel="noopener"></a>` : ''}
+        <img src="${escAttr(a.img_sq)}" alt="ad" onerror="this.style.opacity='.15'">
+        ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${escAttr(a.id)}')">ลบ</button>` : ''}
       </div>`).join('');
   };
 
@@ -493,7 +538,7 @@ function renderAds() {
   const m = document.getElementById('mobileAds');
   if (!m) return;
   const bannerList = ads.filter(a => a.img_banner || a.img_sq).slice(0, 2);
-  
+
   let mobileHtml = '';
   // สร้าง 2 กรอบเสมอ
   for (let i = 0; i < 2; i++) {
@@ -502,9 +547,9 @@ function renderAds() {
       const imgUrl = a.img_banner || a.img_sq;
       mobileHtml += `
         <div class="ad-item ad-banner">
-          ${a.link ? `<a href="${a.link}" target="_blank" rel="noopener"></a>` : ''}
-          <img src="${imgUrl}" alt="ad" onerror="this.style.opacity='.15'">
-          ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${a.id}')">ลบ</button>` : ''}
+          ${a.link ? `<a href="${escAttr(a.link)}" target="_blank" rel="noopener"></a>` : ''}
+          <img src="${escAttr(imgUrl)}" alt="ad" onerror="this.style.opacity='.15'">
+          ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${escAttr(a.id)}')">ลบ</button>` : ''}
         </div>`;
     } else {
       // ถ้าไม่มีโฆษณามาเติม ให้ใส่กรอบโปร่งแสง
@@ -532,7 +577,7 @@ function getFilteredAndSorted() {
       || (m.genre  ||'').toLowerCase().includes(q)
       || String(m.year||'').includes(q);
     const mp = filterPlatform === 'all' || (m.platforms||[]).includes(filterPlatform);
-    
+
     let mt = true;
     const g = (m.genre || '').toLowerCase();
     if (filterType === 'series') mt = g.includes('series') || g.includes('ซีรีส์');
@@ -559,28 +604,34 @@ function getFilteredAndSorted() {
 function buildCardHTML(m, i, noAnim = false) {
   const animClass = noAnim ? 'no-anim' : '';
   const delay     = noAnim ? '' : `style="animation-delay:${Math.min((i % PAGE_SIZE) * 0.03, 0.4)}s"`;
+
+  // Escaped, safe fallback markup for missing/broken posters — no inline
+  // string built from user data inside an HTML attribute anymore.
+  const posterFirstChar = esc((m.title || '?').charAt(0));
+  const noPosterHTML = `<div class="no-poster">🎬<small>${posterFirstChar}</small></div>`;
   const pos = m.poster
-    ? `<img src="${m.poster}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-poster\\'>🎬<small>${(m.title||'?').charAt(0)}</small></div>'">`
-    : `<div class="no-poster">🎬<small>${(m.title||'?').charAt(0)}</small></div>`;
+    ? `<img src="${escAttr(m.poster)}" loading="lazy" data-fallback="1">`
+    : noPosterHTML;
+
   const plats = (m.platforms||[]).map(p =>
-    `<span class="ptag ${p}">${PLAT_LABEL[p]||p}</span>`
+    `<span class="ptag ${esc(p)}">${esc(PLAT_LABEL[p]||p)}</span>`
   ).join('');
-  const dubs = (m.dubs||[]).map(d => `<span class="dub-tag">${d}</span>`).join('');
-  const meta = [m.year, m.genre, m.country].filter(Boolean).join(' · ');
+  const dubs = (m.dubs||[]).map(d => `<span class="dub-tag">${esc(d)}</span>`).join('');
+  const meta = [m.year, m.genre, m.country].filter(Boolean).map(esc).join(' · ');
   const cbHtml = isAdmin
-    ? `<input type="checkbox" class="card-checkbox" value="${m.id}" onchange="toggleSelect('${m.id}',this.checked)" ${selectedMovies.has(m.id)?'checked':''}>`
+    ? `<input type="checkbox" class="card-checkbox" value="${escAttr(m.id)}" onchange="toggleSelect('${escAttr(m.id)}',this.checked)" ${selectedMovies.has(m.id)?'checked':''}>`
     : '';
   const actHtml = isAdmin
-    ? `<div class="card-actions"><button class="btn-edit" onclick="openEditModal('${m.id}')">✏️ แก้ไข</button><button class="btn-del" onclick="deleteMovie('${m.id}')">🗑️ ลบ</button></div>`
+    ? `<div class="card-actions"><button class="btn-edit" onclick="openEditModal('${escAttr(m.id)}')">✏️ แก้ไข</button><button class="btn-del" onclick="deleteMovie('${escAttr(m.id)}')">🗑️ ลบ</button></div>`
     : '';
 
   return `
-  <div class="card ${animClass}" ${delay}>
+  <div class="card ${animClass}" ${delay} data-poster-fallback="${noPosterHTML.replace(/"/g, '&quot;')}">
     ${cbHtml}
     <div class="card-poster">${pos}</div>
     <div class="card-body">
-      <div class="c-title">${m.title||''}</div>
-      ${m.title_th ? `<div class="c-th">${m.title_th}</div>` : ''}
+      <div class="c-title">${esc(m.title)}</div>
+      ${m.title_th ? `<div class="c-th">${esc(m.title_th)}</div>` : ''}
       ${meta       ? `<div class="c-meta">${meta}</div>` : ''}
       ${dubs       ? `<div class="c-dubs">${dubs}</div>` : ''}
       <div class="c-platforms">${plats}</div>
@@ -588,6 +639,20 @@ function buildCardHTML(m, i, noAnim = false) {
     </div>
   </div>`;
 }
+
+// Delegated handler for broken poster images: reads the pre-escaped
+// fallback markup from the card's data attribute instead of building
+// HTML inline inside an onerror="" attribute (which was fragile and
+// unsafe if a title contained a quote character).
+document.getElementById('movieGrid')?.addEventListener('error', e => {
+  const img = e.target;
+  if (img.tagName !== 'IMG' || !img.dataset.fallback) return;
+  const card = img.closest('.card');
+  const posterWrap = img.parentElement;
+  if (card && posterWrap) {
+    posterWrap.innerHTML = card.dataset.posterFallback || '';
+  }
+}, true);
 
 function render(isAppend = false) {
   const grid   = document.getElementById('movieGrid');
@@ -660,7 +725,7 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
     if (key === 'default') { sortKey = 'default'; }
     else if (sortKey === key) { sortDir[key] = (sortDir[key] ?? 1) * -1; }
     else { sortKey = key; if (!sortDir[key]) sortDir[key] = 1; }
-    
+
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.remove('active');
       const ar = b.querySelector('span');
@@ -685,17 +750,23 @@ function buildAC(q, el) {
   ).slice(0, 6);
   if (!matches.length) { el.style.display = 'none'; return; }
 
+  // Highlights the matched substring safely: escapes the whole string
+  // first, then wraps the (also escaped) matched portion in <mark>.
   const hl = (s, q) => {
-    const idx = (s||'').toLowerCase().indexOf(q.toLowerCase());
-    if (idx < 0) return s;
-    return s.slice(0,idx) + `<mark>${s.slice(idx,idx+q.length)}</mark>` + s.slice(idx+q.length);
+    const str = String(s || '');
+    const idx = str.toLowerCase().indexOf(q.toLowerCase());
+    if (idx < 0) return esc(str);
+    const before = esc(str.slice(0, idx));
+    const match  = esc(str.slice(idx, idx + q.length));
+    const after  = esc(str.slice(idx + q.length));
+    return `${before}<mark>${match}</mark>${after}`;
   };
 
   el.innerHTML = matches.map(m => `
-    <div class="ac-item" data-title="${m.title}">
+    <div class="ac-item" data-title="${escAttr(m.title)}">
       <svg width="12" height="12" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <span>${hl(m.title, q)}${m.title_th?` <span style="color:var(--muted);font-size:.75rem">${hl(m.title_th, q)}</span>`:''}</span>
-      <span class="ac-sub">${m.year||''}</span>
+      <span class="ac-sub">${esc(m.year||'')}</span>
     </div>`).join('');
   el.style.display = 'block';
 
