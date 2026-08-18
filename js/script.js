@@ -479,7 +479,7 @@ async function addAd() {
 
   const sideAds = ads.filter(a => a.side === side);
   if (sideAds.length >= 5) {
-    toast(`โฆษณาด้าน${side==='left'?'ซ้าย':'ขวา'} เต็ม 5 รูปแล้ว`, 'err'); return;
+    toast(`โฆษณาด้าน${side==='left'?'ซ้าย':'ขวา'} เต็ม 5 รูปแล้ว ลบอันเก่าออกก่อนในรายการ "จัดการโฆษณาทั้งหมด" ด้านล่าง`, 'err'); return;
   }
 
   try {
@@ -490,7 +490,6 @@ async function addAd() {
     document.getElementById('ad_img_sq').value     = '';
     document.getElementById('ad_img_banner').value = '';
     document.getElementById('ad_link').value       = '';
-    document.getElementById('addAdDetails')?.removeAttribute('open');
     renderAds();
     toast('เพิ่มโฆษณาสำเร็จ ✓', 'ok');
   } catch (e) {
@@ -536,27 +535,76 @@ function renderAds() {
 
   // Mobile Banner (แนวนอน บังคับให้มี 2 กรอบเสมอ)
   const m = document.getElementById('mobileAds');
-  if (!m) return;
-  const bannerList = ads.filter(a => a.img_banner || a.img_sq).slice(0, 2);
+  if (m) {
+    const bannerList = ads.filter(a => a.img_banner || a.img_sq).slice(0, 2);
 
-  let mobileHtml = '';
-  // สร้าง 2 กรอบเสมอ
-  for (let i = 0; i < 2; i++) {
-    if (bannerList[i]) {
-      const a = bannerList[i];
-      const imgUrl = a.img_banner || a.img_sq;
-      mobileHtml += `
-        <div class="ad-item ad-banner">
-          ${a.link ? `<a href="${escAttr(a.link)}" target="_blank" rel="noopener"></a>` : ''}
-          <img src="${escAttr(imgUrl)}" alt="ad" onerror="this.style.opacity='.15'">
-          ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${escAttr(a.id)}')">ลบ</button>` : ''}
-        </div>`;
-    } else {
-      // ถ้าไม่มีโฆษณามาเติม ให้ใส่กรอบโปร่งแสง
-      mobileHtml += `<div class="ad-item ad-banner">${defaultPlaceholder}</div>`;
+    let mobileHtml = '';
+    // สร้าง 2 กรอบเสมอ
+    for (let i = 0; i < 2; i++) {
+      if (bannerList[i]) {
+        const a = bannerList[i];
+        const imgUrl = a.img_banner || a.img_sq;
+        mobileHtml += `
+          <div class="ad-item ad-banner">
+            ${a.link ? `<a href="${escAttr(a.link)}" target="_blank" rel="noopener"></a>` : ''}
+            <img src="${escAttr(imgUrl)}" alt="ad" onerror="this.style.opacity='.15'">
+            ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${escAttr(a.id)}')">ลบ</button>` : ''}
+          </div>`;
+      } else {
+        // ถ้าไม่มีโฆษณามาเติม ให้ใส่กรอบโปร่งแสง
+        mobileHtml += `<div class="ad-item ad-banner">${defaultPlaceholder}</div>`;
+      }
     }
+    m.innerHTML = mobileHtml;
   }
-  m.innerHTML = mobileHtml;
+
+  // ★ ใหม่: รายการจัดการโฆษณาทั้งหมดสำหรับแอดมิน (ไม่ขึ้นกับว่ามีรูปครบหรือถูกตัดด้วย .slice() หรือไม่
+  // — นี่คือจุดที่แก้ปัญหา "ลบโฆษณาเดิมไม่ได้": เดิมปุ่มลบผูกอยู่กับ drawPC/mobile banner
+  // ซึ่งซ่อนโฆษณาที่ไม่มีรูป img_sq (ฝั่ง PC) หรืออยู่เกินอันดับ 2 (ฝั่งมือถือ) ทำให้กดลบไม่ได้เลย
+  // แม้จะยังกินโควตา 5 รูป/ฝั่งอยู่ก็ตาม
+  renderAdminAdList();
+}
+
+function renderAdminAdList() {
+  const el = document.getElementById('adminAdList');
+  if (!el) return;
+  if (!isAdmin) { el.innerHTML = ''; return; }
+
+  if (!ads.length) {
+    el.innerHTML = `<p style="font-size:.8rem;color:var(--muted,#94a3b8)">ยังไม่มีโฆษณาในระบบ</p>`;
+    return;
+  }
+
+  const row = a => {
+    const thumb = a.img_sq || a.img_banner || '';
+    const missing = [];
+    if (!a.img_sq) missing.push('ไม่มีรูปจัตุรัส');
+    if (!a.img_banner) missing.push('ไม่มีรูปแบนเนอร์');
+    return `
+      <div class="admin-ad-row">
+        ${thumb
+          ? `<img src="${escAttr(thumb)}" class="admin-ad-thumb" onerror="this.style.opacity='.2'">`
+          : `<div class="admin-ad-thumb admin-ad-thumb-empty">ไม่มีรูป</div>`}
+        <div class="admin-ad-info">
+          <div>${a.link ? esc(a.link) : '<span style="color:var(--muted,#94a3b8)">(ไม่มีลิงก์)</span>'}</div>
+          ${missing.length ? `<div style="color:#f59e0b">${missing.join(' · ')}</div>` : ''}
+        </div>
+        <button class="del-ad-btn-admin" onclick="deleteAd('${escAttr(a.id)}')">🗑️ ลบ</button>
+      </div>`;
+  };
+
+  const left  = ads.filter(a => a.side === 'left');
+  const right = ads.filter(a => a.side === 'right');
+
+  el.innerHTML = `
+    <div class="admin-ad-side-group">
+      <strong>ฝั่งซ้าย (${left.length}/5)</strong>
+      ${left.length ? left.map(row).join('') : `<p style="font-size:.78rem;color:var(--muted,#94a3b8)">ไม่มีโฆษณา</p>`}
+    </div>
+    <div class="admin-ad-side-group" style="margin-top:10px">
+      <strong>ฝั่งขวา (${right.length}/5)</strong>
+      ${right.length ? right.map(row).join('') : `<p style="font-size:.78rem;color:var(--muted,#94a3b8)">ไม่มีโฆษณา</p>`}
+    </div>`;
 }
 
 /* ══════════════════════════════════════════
