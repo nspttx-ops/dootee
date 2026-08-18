@@ -22,6 +22,37 @@
 .admin-ad-info{flex:1;min-width:0;font-size:.78rem;word-break:break-all}
 .del-ad-btn-admin{flex-shrink:0;background:#ef4444;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:.75rem;cursor:pointer}
 .del-ad-btn-admin:hover{background:#dc2626}
+
+/* ---- ข้อที่ 1: สไตล์สำหรับจัดกลุ่มแบบเลื่อนแนวนอน (Horizontal Rows) ---- */
+.content-sections { display: flex; flex-direction: column; gap: 30px; width: 100%; }
+.category-row { width: 100%; }
+.category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px; }
+.category-header h2 { font-size: 1.25rem; font-weight: 600; color: #fff; margin: 0; display: flex; align-items: center; gap: 8px; }
+.see-all { font-size: 0.85rem; color: #1ce783; text-decoration: none; font-weight: 500; transition: opacity 0.2s; }
+.see-all:hover { opacity: 0.8; }
+.horizontal-scroll { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 4px 12px 4px; scroll-behavior: smooth; }
+.horizontal-scroll::-webkit-scrollbar { height: 6px; }
+.horizontal-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 10px; }
+.horizontal-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; }
+.horizontal-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+.horizontal-scroll .card { flex: 0 0 165px; scroll-snap-align: start; margin: 0; }
+
+/* ---- ข้อที่ 2: สไตล์สำหรับหน้าต่างรายละเอียดหนัง (Detail Modal) ---- */
+.detail-modal-body { display: flex; gap: 20px; margin-top: 15px; color: #fff; }
+@media (max-width: 600px) { .detail-modal-body { flex-direction: column; align-items: center; text-align: center; } }
+.detail-poster { width: 140px; height: 200px; object-fit: cover; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); flex-shrink: 0; background: rgba(255,255,255,0.05); }
+.detail-info { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; text-align: left; }
+.detail-title-en { font-size: 1.3rem; font-weight: 700; color: #fff; }
+.detail-title-th { font-size: 1.05rem; color: #94a3b8; margin-top: -4px; }
+.detail-meta-tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.8rem; color: #cbd5e1; margin: 4px 0; }
+.detail-meta-item { background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px; }
+.detail-label { font-size: 0.85rem; color: #94a3b8; font-weight: 500; margin-top: 5px; }
+.detail-platforms-list, .detail-dubs-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---- ข้อที่ 3: สไตล์เพิ่มเติมสำหรับปุ่มตัวกรองสตรีมมิงแบบเน้นโลโก้พรีเมียม ---- */
+.filter-scroll .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; }
+.hint-chip { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+.hint-chip:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(28,231,131,0.2); }
 </style>
 </head>
 <body>
@@ -173,7 +204,6 @@
             <p style="font-size:.75rem;color:var(--muted)">จำกัดฝั่งละ 5 รูป</p>
             <button class="btn-primary" style="margin-top:12px;width:100%;background:#1ce783;color:#000" onclick="addAd()">➕ เพิ่มโฆษณา</button>
 
-            <!-- ★ ใหม่: รายการจัดการโฆษณาทั้งหมด (โชว์ทุกอันไม่ว่าจะมีรูปครบหรือไม่ ลบได้ทุกอัน) -->
             <div id="adminAdList" class="admin-ad-list"></div>
           </div>
         </details>
@@ -207,9 +237,7 @@
         </div>
       </div>
 
-      <div class="grid" id="movieGrid">
-        <div class="skel"></div><div class="skel"></div>
-        <div class="skel"></div><div class="skel"></div>
+      <div id="movieGrid" class="content-sections">
         <div class="skel"></div><div class="skel"></div>
         <div class="skel"></div><div class="skel"></div>
       </div>
@@ -307,6 +335,16 @@
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeEditModal()">ยกเลิก</button>
       <button class="btn-save" onclick="saveEdit()">💾 บันทึกข้อมูล</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="detailOverlay">
+  <div class="modal" style="max-width:600px;">
+    <h3 style="margin:0; font-size:1.1rem; color:var(--accent,#1ce783); border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">🎬 ข้อมูลสตรีมมิง</h3>
+    <div id="detailModalContent"></div>
+    <div class="modal-actions" style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.1); padding-top:12px;">
+      <button class="btn-cancel" onclick="closeDetailModal()" style="width:100%">ปิดหน้าต่าง</button>
     </div>
   </div>
 </div>
