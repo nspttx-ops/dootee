@@ -43,19 +43,7 @@ let selectedMovies = new Set();
 
 /* ══════════════════════════════════════════
    SECURITY HELPERS
-   NOTE: isAdmin below only toggles what the UI *shows*.
-   It is NOT a security boundary — anyone can set
-   `isAdmin = true` in the browser console. The real
-   protection MUST live in Firestore Security Rules
-   (see firestore.rules). Every write call below will
-   fail server-side for a non-authenticated user as long
-   as the rules are deployed correctly, even if someone
-   bypasses this client-side flag.
 ══════════════════════════════════════════ */
-
-// Escapes HTML special characters before inserting user-supplied
-// text (movie titles, genres, etc.) into innerHTML, preventing
-// stored XSS from malicious/careless data entry or CSV uploads.
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -66,8 +54,6 @@ function esc(s) {
   }[c]));
 }
 
-// Safe attribute-value escaping (for use inside "…" HTML attributes,
-// e.g. value="", data-title="")
 function escAttr(s) {
   return esc(s);
 }
@@ -227,7 +213,7 @@ function handleCSVUpload() {
         for (let rowIdx = 0; rowIdx < data.length; rowIdx++) {
           const row = data[rowIdx];
           const title = (row.Title || row.title || row['ชื่อเรื่อง'] || '').trim();
-          if (!title) { skipped++; skippedRows.push(rowIdx + 2); continue; } // +2 = header row + 1-index
+          if (!title) { skipped++; skippedRows.push(rowIdx + 2); continue; } 
 
           const dubs = (row.Dubs || row.dubs || row.Audio || row.audio || row['เสียงพากย์'] || '')
             .split(',').map(s => s.trim()).filter(Boolean);
@@ -380,7 +366,8 @@ async function addMovie() {
   }
 }
 
-function openEditModal(id) {
+function openEditModal(id, e) {
+  if(e) e.stopPropagation(); // ป้องกันไม่ให้คลิกแล้วเปิด Detail Modal
   if (!isAdmin) return;
   const m = movies.find(x => x.id === id);
   if (!m) return;
@@ -438,7 +425,8 @@ async function saveEdit() {
   }
 }
 
-async function deleteMovie(id) {
+async function deleteMovie(id, e) {
+  if(e) e.stopPropagation();
   if (!isAdmin || !confirm('ยืนยันลบ?')) return;
   try {
     await db.collection('movies').doc(id).delete();
@@ -460,7 +448,7 @@ function resetCBs(ids) {
 }
 
 /* ══════════════════════════════════════════
-   ADS SYSTEM (โปร่งแสง และบังคับ 2 แบนเนอร์มือถือ)
+   ADS SYSTEM 
 ══════════════════════════════════════════ */
 async function addAd() {
   if (!isAdmin) return;
@@ -508,14 +496,11 @@ async function deleteAd(id) {
 }
 
 function renderAds() {
-  // Placeholder โปร่งแสง ที่แสดงให้ผู้ใช้ทุกคนเห็น
   const defaultPlaceholder = `<div class="ad-placeholder">ติดต่อโฆษณา<br><span style="color:var(--accent);font-weight:600;">dootee.info@gmail.com</span></div>`;
 
-  // PC Sidebar (จัตุรัส 1:1, จำกัด 5 รูป/ข้าง)
   const drawPC = side => {
     const list = ads.filter(a => a.side === side && a.img_sq).slice(0, 5);
 
-    // ถ้าไม่มีโฆษณาเลย ให้โชว์กรอบโปร่งแสง 1 กรอบ
     if (!list.length) {
       return `<div class="ad-item ad-sq">${defaultPlaceholder}</div>`;
     }
@@ -533,13 +518,11 @@ function renderAds() {
   if (l) l.innerHTML = drawPC('left');
   if (r) r.innerHTML = drawPC('right');
 
-  // Mobile Banner (แนวนอน บังคับให้มี 2 กรอบเสมอ)
   const m = document.getElementById('mobileAds');
   if (m) {
     const bannerList = ads.filter(a => a.img_banner || a.img_sq).slice(0, 2);
 
     let mobileHtml = '';
-    // สร้าง 2 กรอบเสมอ
     for (let i = 0; i < 2; i++) {
       if (bannerList[i]) {
         const a = bannerList[i];
@@ -551,17 +534,12 @@ function renderAds() {
             ${isAdmin ? `<button class="del-ad-btn" onclick="deleteAd('${escAttr(a.id)}')">ลบ</button>` : ''}
           </div>`;
       } else {
-        // ถ้าไม่มีโฆษณามาเติม ให้ใส่กรอบโปร่งแสง
         mobileHtml += `<div class="ad-item ad-banner">${defaultPlaceholder}</div>`;
       }
     }
     m.innerHTML = mobileHtml;
   }
 
-  // ★ ใหม่: รายการจัดการโฆษณาทั้งหมดสำหรับแอดมิน (ไม่ขึ้นกับว่ามีรูปครบหรือถูกตัดด้วย .slice() หรือไม่
-  // — นี่คือจุดที่แก้ปัญหา "ลบโฆษณาเดิมไม่ได้": เดิมปุ่มลบผูกอยู่กับ drawPC/mobile banner
-  // ซึ่งซ่อนโฆษณาที่ไม่มีรูป img_sq (ฝั่ง PC) หรืออยู่เกินอันดับ 2 (ฝั่งมือถือ) ทำให้กดลบไม่ได้เลย
-  // แม้จะยังกินโควตา 5 รูป/ฝั่งอยู่ก็ตาม
   renderAdminAdList();
 }
 
@@ -649,12 +627,11 @@ function getFilteredAndSorted() {
   return list;
 }
 
+// อัปเดต Card HTML เพิ่ม onclick="openDetailModal('id')" สำหรับผู้ใช้ทั่วไป
 function buildCardHTML(m, i, noAnim = false) {
   const animClass = noAnim ? 'no-anim' : '';
   const delay     = noAnim ? '' : `style="animation-delay:${Math.min((i % PAGE_SIZE) * 0.03, 0.4)}s"`;
 
-  // Escaped, safe fallback markup for missing/broken posters — no inline
-  // string built from user data inside an HTML attribute anymore.
   const posterFirstChar = esc((m.title || '?').charAt(0));
   const noPosterHTML = `<div class="no-poster">🎬<small>${posterFirstChar}</small></div>`;
   const pos = m.poster
@@ -667,14 +644,14 @@ function buildCardHTML(m, i, noAnim = false) {
   const dubs = (m.dubs||[]).map(d => `<span class="dub-tag">${esc(d)}</span>`).join('');
   const meta = [m.year, m.genre, m.country].filter(Boolean).map(esc).join(' · ');
   const cbHtml = isAdmin
-    ? `<input type="checkbox" class="card-checkbox" value="${escAttr(m.id)}" onchange="toggleSelect('${escAttr(m.id)}',this.checked)" ${selectedMovies.has(m.id)?'checked':''}>`
+    ? `<input type="checkbox" class="card-checkbox" value="${escAttr(m.id)}" onchange="toggleSelect('${escAttr(m.id)}',this.checked)" onclick="event.stopPropagation()" ${selectedMovies.has(m.id)?'checked':''}>`
     : '';
   const actHtml = isAdmin
-    ? `<div class="card-actions"><button class="btn-edit" onclick="openEditModal('${escAttr(m.id)}')">✏️ แก้ไข</button><button class="btn-del" onclick="deleteMovie('${escAttr(m.id)}')">🗑️ ลบ</button></div>`
+    ? `<div class="card-actions"><button class="btn-edit" onclick="openEditModal('${escAttr(m.id)}', event)">✏️ แก้ไข</button><button class="btn-del" onclick="deleteMovie('${escAttr(m.id)}', event)">🗑️ ลบ</button></div>`
     : '';
 
   return `
-  <div class="card ${animClass}" ${delay} data-poster-fallback="${noPosterHTML.replace(/"/g, '&quot;')}">
+  <div class="card ${animClass}" ${delay} data-poster-fallback="${noPosterHTML.replace(/"/g, '&quot;')}" onclick="openDetailModal('${escAttr(m.id)}')">
     ${cbHtml}
     <div class="card-poster">${pos}</div>
     <div class="card-body">
@@ -688,10 +665,6 @@ function buildCardHTML(m, i, noAnim = false) {
   </div>`;
 }
 
-// Delegated handler for broken poster images: reads the pre-escaped
-// fallback markup from the card's data attribute instead of building
-// HTML inline inside an onerror="" attribute (which was fragile and
-// unsafe if a title contained a quote character).
 document.getElementById('movieGrid')?.addEventListener('error', e => {
   const img = e.target;
   if (img.tagName !== 'IMG' || !img.dataset.fallback) return;
@@ -702,11 +675,12 @@ document.getElementById('movieGrid')?.addEventListener('error', e => {
   }
 }, true);
 
+// อัปเดตฟังก์ชัน Render เพื่อรองรับ Layout แบบ Horizontal Rows (ถ้าไม่มีการค้นหา/ฟิลเตอร์) และเปลี่ยนกลับเป็น Grid เมื่อมีการค้นหา
 function render(isAppend = false) {
-  const grid   = document.getElementById('movieGrid');
+  const gridContainer = document.getElementById('movieGrid'); // Container หลักที่รับ Class content-sections หรือ grid
   const loader = document.getElementById('infiniteLoader');
   const countEl = document.getElementById('countNum');
-  if (!grid) return;
+  if (!gridContainer) return;
 
   if (!isAppend) {
     currentPage     = 1;
@@ -714,7 +688,8 @@ function render(isAppend = false) {
     if (countEl) countEl.textContent = currentFiltered.length;
 
     if (!currentFiltered.length && movies.length > 0) {
-      grid.innerHTML = `<div class="empty"><p>🔍 ไม่พบเรื่องที่ค้นหา</p></div>`;
+      gridContainer.className = 'grid'; // คืนค่าเป็น Grid สำหรับข้อความว่างเปล่า
+      gridContainer.innerHTML = `<div class="empty"><p>🔍 ไม่พบเรื่องที่ค้นหา</p></div>`;
       if (loader) loader.style.display = 'none';
       return;
     }
@@ -723,26 +698,128 @@ function render(isAppend = false) {
       return;
     }
 
-    const items = currentFiltered.slice(0, PAGE_SIZE);
-    grid.innerHTML = items.map((m, i) => buildCardHTML(m, i, false)).join('');
-  } else {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const end   = currentPage * PAGE_SIZE;
-    const items = currentFiltered.slice(start, end);
-    if (!items.length) {
-      if (loader) loader.style.display = 'none';
-      return;
+    // หากมีการค้นหา หรือ เลือกหมวดหมู่ หรือ เลือกแพลตฟอร์ม จะแสดงผลเป็น Grid ปกติ
+    if (searchQ || filterPlatform !== 'all' || filterType !== 'all') {
+      gridContainer.className = 'grid'; // ใช้ CSS Grid เดิม
+      const items = currentFiltered.slice(0, PAGE_SIZE);
+      gridContainer.innerHTML = items.map((m, i) => buildCardHTML(m, i, false)).join('');
+    } else {
+      // หน้าแรก (ไม่มีฟิลเตอร์) ใช้โครงสร้างแนวนอน (Horizontal Rows)
+      gridContainer.className = 'content-sections';
+      
+      const newMovies = movies.filter(m => m.year && m.year >= 2024).slice(0, 15); // ตัวอย่างเงื่อนไขหนังใหม่
+      const seriesList = movies.filter(m => (m.genre||'').toLowerCase().includes('series')).slice(0, 15); // ตัวอย่างเงื่อนไขซีรีส์
+      const allOther = movies.slice(0, 15); // หมวดหมู่รวม
+
+      let html = '';
+      if(newMovies.length > 0) {
+        html += `
+          <div class="category-row">
+            <div class="category-header"><h2>🔥 มาใหม่ล่าสุด</h2></div>
+            <div class="horizontal-scroll">${newMovies.map((m, i) => buildCardHTML(m, i, false)).join('')}</div>
+          </div>`;
+      }
+      if(seriesList.length > 0) {
+        html += `
+          <div class="category-row">
+            <div class="category-header"><h2>📺 ซีรีส์น่าดู</h2></div>
+            <div class="horizontal-scroll">${seriesList.map((m, i) => buildCardHTML(m, i, false)).join('')}</div>
+          </div>`;
+      }
+      if(allOther.length > 0) {
+         html += `
+          <div class="category-row">
+            <div class="category-header"><h2>⭐ แนะนำสำหรับคุณ</h2></div>
+            <div class="horizontal-scroll">${allOther.map((m, i) => buildCardHTML(m, i, false)).join('')}</div>
+          </div>`;
+      }
+      gridContainer.innerHTML = html;
     }
-    items.forEach((m, i) => {
-      grid.insertAdjacentHTML('beforeend', buildCardHTML(m, start + i, true));
-    });
+  } else {
+    // การโหลดเพิ่มด้วย Infinite Scroll (จะทำงานก็ต่อเมื่อเป็นโหมด Grid เท่านั้น)
+    if (gridContainer.className.includes('grid')) {
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end   = currentPage * PAGE_SIZE;
+      const items = currentFiltered.slice(start, end);
+      if (!items.length) {
+        if (loader) loader.style.display = 'none';
+        return;
+      }
+      items.forEach((m, i) => {
+        gridContainer.insertAdjacentHTML('beforeend', buildCardHTML(m, start + i, true));
+      });
+    }
   }
 
   const totalShown = currentPage * PAGE_SIZE;
   if (loader) {
-    loader.style.display = totalShown < currentFiltered.length ? 'flex' : 'none';
+    loader.style.display = (totalShown < currentFiltered.length && gridContainer.className.includes('grid')) ? 'flex' : 'none';
   }
 }
+
+/* ══════════════════════════════════════════
+   DETAIL MODAL LOGIC (สำหรับผู้ใช้ทั่วไป)
+══════════════════════════════════════════ */
+function openDetailModal(id) {
+  // เช็คก่อนว่าไม่ได้กำลังอยู่ในโหมดเลือกเพื่อลบของ Admin
+  if(isAdmin && document.getElementById('bulkActionBar')?.classList.contains('show')) return; 
+
+  const m = movies.find(x => x.id === id);
+  if (!m) return;
+
+  const contentDiv = document.getElementById('detailModalContent');
+  const posterFirstChar = esc((m.title || '?').charAt(0));
+  const pos = m.poster
+    ? `<img src="${escAttr(m.poster)}" class="detail-poster" loading="lazy" onerror="this.outerHTML='<div class=\\'no-poster\\' style=\\'width:140px;height:200px;border-radius:10px;\\'>🎬<small>${posterFirstChar}</small></div>'">`
+    : `<div class="no-poster" style="width:140px;height:200px;border-radius:10px;flex-shrink:0;">🎬<small>${posterFirstChar}</small></div>`;
+
+  const plats = (m.platforms||[]).map(p =>
+    `<span class="ptag ${esc(p)}" style="font-size:0.9rem; padding:6px 12px;">${esc(PLAT_LABEL[p]||p)}</span>`
+  ).join('') || '<span style="color:#94a3b8; font-size:0.85rem;">ไม่ระบุ</span>';
+  
+  const dubs = (m.dubs||[]).map(d => 
+    `<span class="dub-tag" style="background:rgba(255,255,255,0.1); padding:4px 8px; border-radius:4px; font-size:0.8rem;">${esc(d)}</span>`
+  ).join('') || '<span style="color:#94a3b8; font-size:0.85rem;">ไม่ระบุ</span>';
+
+  contentDiv.innerHTML = `
+    <div class="detail-modal-body">
+      ${pos}
+      <div class="detail-info">
+        <div>
+          <div class="detail-title-en">${esc(m.title)}</div>
+          ${m.title_th ? `<div class="detail-title-th">${esc(m.title_th)}</div>` : ''}
+        </div>
+        
+        <div class="detail-meta-tags">
+          ${m.year ? `<span class="detail-meta-item">🗓️ ${esc(m.year)}</span>` : ''}
+          ${m.genre ? `<span class="detail-meta-item">🍿 ${esc(m.genre)}</span>` : ''}
+          ${m.country ? `<span class="detail-meta-item">🌎 ${esc(m.country)}</span>` : ''}
+        </div>
+
+        <div>
+          <div class="detail-label">🔊 เสียงพากย์ / ซับไตเติ้ล:</div>
+          <div class="detail-dubs-list">${dubs}</div>
+        </div>
+
+        <div>
+          <div class="detail-label">▶️ ดูได้ที่ (สตรีมมิง):</div>
+          <div class="detail-platforms-list" style="margin-top:6px;">${plats}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('detailOverlay')?.classList.add('open');
+}
+
+function closeDetailModal() {
+  document.getElementById('detailOverlay')?.classList.remove('open');
+}
+
+document.getElementById('detailOverlay')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeDetailModal();
+});
+
 
 /* ══════════════════════════════════════════
    FILTER & SORT
@@ -753,10 +830,10 @@ document.getElementById('platformFilters')?.addEventListener('click', e => {
   document.querySelectorAll('#platformFilters .pill').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   filterPlatform = btn.dataset.platform;
+  enterBrowse(); // เข้าสู่โหมดแสดงผลเป็น Grid
   render();
 });
 
-// หมวดหมู่ Header
 document.querySelectorAll('.type-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
@@ -777,12 +854,13 @@ document.querySelectorAll('.sort-btn').forEach(btn => {
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.remove('active');
       const ar = b.querySelector('span');
-      if (ar) ar.textContent = ''; // Reset arrow
+      if (ar) ar.textContent = ''; 
       if (b.dataset.sort === sortKey && ar) {
          ar.textContent = (sortDir[sortKey] ?? 1) === 1 ? '↑' : '↓';
       }
     });
     btn.classList.add('active');
+    enterBrowse(); // ถือว่าเป็นการโต้ตอบกับข้อมูล ให้สลับเป็น Grid
     render();
   });
 });
@@ -798,8 +876,6 @@ function buildAC(q, el) {
   ).slice(0, 6);
   if (!matches.length) { el.style.display = 'none'; return; }
 
-  // Highlights the matched substring safely: escapes the whole string
-  // first, then wraps the (also escaped) matched portion in <mark>.
   const hl = (s, q) => {
     const str = String(s || '');
     const idx = str.toLowerCase().indexOf(q.toLowerCase());
@@ -925,12 +1001,10 @@ document.addEventListener('touchend', e => {
   const deltaX = touchEndX - touchStartX;
   const deltaY = touchEndY - touchStartY;
 
-  // 1. ปัดจากซ้ายไปขวา (Back to Home)
   if (touchStartX < 40 && deltaX > 100 && Math.abs(deltaY) < 50) {
     goHome();
   }
 
-  // 2. ปัดจากบนลงล่าง (Pull to Refresh)
   if (window.scrollY === 0 && deltaY > 150 && Math.abs(deltaX) < 50) {
     window.location.reload();
   }
